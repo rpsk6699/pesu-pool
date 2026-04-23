@@ -107,7 +107,7 @@ export async function joinPool(poolId: string) {
   }
 
   // Prevent a user from joining the same pool twice
-  if (pool.participants.some((p) => p.id === user.id)) {
+  if (pool.participants.some((p: { id: string }) => p.id === user.id)) {
     revalidatePath('/')
     return
   }
