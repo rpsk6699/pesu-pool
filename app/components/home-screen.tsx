@@ -5,6 +5,8 @@ import { useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { deletePool, joinPool } from '../actions/poolActions'
 import { ChatBox } from './chat-box' // Make sure the filename matches exactly
+import PusherClient from 'pusher-js'
+import { useEffect } from 'react' // <--- Add useEffect here
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
@@ -51,6 +53,22 @@ export function HomeScreen({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Listen for background database updates and silently refresh the page
+  useEffect(() => {
+    const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+    })
+    
+    const channel = pusher.subscribe('global-pools')
+    channel.bind('pools-updated', () => {
+      // This tells Next.js to fetch the fresh server data without reloading the browser!
+      router.refresh() 
+    })
+
+    return () => {
+      pusher.unsubscribe('global-pools')
+    }
+  }, [router])
 
   // Ensure the frontend fallback matches the backend fallback exactly
   const activeUser = userName || 'Arjun R.'

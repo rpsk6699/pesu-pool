@@ -3,6 +3,15 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '../../lib/prisma'
 import { auth } from '../../auth'
+import Pusher from 'pusher'
+
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID!,
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
+  secret: process.env.PUSHER_SECRET!,
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+  useTLS: true,
+})
 
 const TEST_USER = {
   name: 'Arjun R.',
@@ -63,6 +72,7 @@ export async function createPool(formData: FormData) {
     },
   })
 
+  await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
 }
 
@@ -71,6 +81,7 @@ export async function deletePool(poolId: string) {
   await prisma.pool.delete({
     where: { id: poolId },
   })
+  await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
   revalidatePath('/rides')
 }
@@ -102,12 +113,14 @@ export async function joinPool(poolId: string) {
   })
 
   if (!pool || pool.spotsLeft <= 0) {
+    await pusher.trigger('global-pools', 'pools-updated', {})
     revalidatePath('/')
     return
   }
 
   // Prevent a user from joining the same pool twice
   if (pool.participants.some((p: { id: string }) => p.id === user.id)) {
+    await pusher.trigger('global-pools', 'pools-updated', {})
     revalidatePath('/')
     return
   }
@@ -125,6 +138,7 @@ export async function joinPool(poolId: string) {
     },
   })
 
+  await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
 }
 export async function closePool(poolId: string) {
@@ -141,6 +155,7 @@ export async function closePool(poolId: string) {
     where: { poolId: poolId },
   })
 
+  await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
 }
 

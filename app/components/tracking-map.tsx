@@ -13,6 +13,16 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Custom Black Icon for the active user
+const myBlackIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 interface TrackingMapProps {
   userName: string;
   poolId: string | null;
@@ -90,9 +100,9 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       <Marker position={[12.9352, 77.5364]}><Popup>PESU Front Gate</Popup></Marker>
       <Marker position={[12.9350, 77.5329]}><Popup>PESU Back Gate</Popup></Marker>
 
-      {/* Your Live Location */}
+      {/* Your Live Location - NOW BLACK */}
       {myLocation && (
-        <Marker position={[myLocation.lat, myLocation.lng]}>
+        <Marker position={[myLocation.lat, myLocation.lng]} icon={myBlackIcon}>
           <Popup>You</Popup>
         </Marker>
       )}

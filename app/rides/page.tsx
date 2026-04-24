@@ -11,9 +11,17 @@ export default async function RidesPage() {
     prisma.pool.count({ where: { status: 'ACTIVE' } }),
     email
       ? prisma.pool.findMany({
-          where: { creator: { email } },
+          where: {
+            OR: [
+              { creator: { email } },
+              { participants: { some: { email } } },
+            ],
+          },
           orderBy: { createdAt: 'desc' },
-          include: { creator: true },
+          include: { 
+            creator: true, 
+            participants: true 
+          },
         })
       : Promise.resolve([]),
   ])
@@ -24,4 +32,3 @@ export default async function RidesPage() {
     </DashboardShell>
   )
 }
-
