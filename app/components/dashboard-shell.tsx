@@ -80,7 +80,7 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
         />
 
         <div className="main">
-          <div className="topbar relative z-50">
+          <div className="topbar relative z-30">
             <div className="flex items-center gap-3">
               <button
                 type="button"

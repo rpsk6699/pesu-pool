@@ -58,30 +58,14 @@ export function HomeScreen({
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
   const currentPoolId = activePool?.id || null
 
-  const stats = [
-    { label: 'Your savings', value: '₹54', hint: 'vs solo auto' },
-    { label: 'Active pools', value: String(activePoolCount), hint: 'right now' },
-    { label: 'Your rides', value: '11', hint: 'this month' },
-  ]
-
   return (
     <div className="flex flex-col gap-4">
       {/* Map isolated with z-0 so it doesn't block the nav menus */}
-      <div className="relative z-0 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+      <div className="relative z-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <TrackingMap userName={activeUser} poolId={currentPoolId} />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {stats.map((stat) => (
-          <article key={stat.label} className="rounded-lg bg-zinc-100 px-3.5 py-3">
-            <p className="mb-1 text-[11px] text-zinc-500">{stat.label}</p>
-            <p className="text-2xl font-medium text-zinc-900">{stat.value}</p>
-            <p className="mt-0.5 text-[11px] text-zinc-500">{stat.hint}</p>
-          </article>
-        ))}
-      </div>
-
-      <h2 className="text-xs font-medium tracking-[0.04em] text-zinc-500 uppercase">Active pools</h2>
+      <h2 className="mt-2 text-xs font-bold tracking-[0.04em] text-zinc-500 uppercase">Active pools</h2>
 
       <div className="flex flex-col gap-2.5">
         {pools.map((pool) => (
@@ -210,11 +194,11 @@ export function HomeScreen({
         ))}
       </div>
 
-      <div className="flex flex-col gap-2.5 sm:flex-row">
+      <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
         <button
           type="button"
           onClick={onRaisePool}
-          className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1"
+          className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1"
         >
           + Raise a pool
         </button>
