@@ -132,7 +132,8 @@ export function RaisePoolModal({
         className="absolute inset-0 bg-black/40"
       />
 
-      <div className="relative w-full max-w-2xl rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
+      {/* ADDED max-h-[90vh] and overflow-y-auto to this container */}
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold tracking-tight text-zinc-900">Raise a pool</h2>
@@ -237,15 +238,13 @@ export function RaisePoolModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="h-11 w-full rounded-md bg-emerald-600 px-4 text-[13px] font-medium text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 disabled:opacity-60"
+              className="h-11 w-full shrink-0 rounded-md bg-emerald-600 px-4 text-[13px] font-medium text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 disabled:opacity-60"
             >
               {isSubmitting ? 'Posting…' : 'Post pool request'}
             </button>
           </div>
-
         </form>
       </div>
     </div>
   )
 }
-
