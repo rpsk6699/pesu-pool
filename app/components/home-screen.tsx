@@ -1,10 +1,9 @@
 'use client'
 
-import { ChatBox } from './chat-box'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import dynamic from 'next/dynamic'
-import { deletePool, joinPool, closePool } from '../actions/poolActions'
+import { deletePool, joinPool } from '../actions/poolActions'
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
@@ -52,165 +51,166 @@ export function HomeScreen({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  // Align the frontend fallback with the backend fallback
+  // Ensure the frontend fallback matches the backend fallback exactly
   const activeUser = userName || 'Arjun R.'
 
   // Use activeUser to check the database arrays
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
   const currentPoolId = activePool?.id || null
 
+  const stats = [
+    { label: 'Your savings', value: '₹54', hint: 'vs solo auto' },
+    { label: 'Active pools', value: String(activePoolCount), hint: 'right now' },
+    { label: 'Your rides', value: '11', hint: 'this month' },
+  ]
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Map isolated with z-0 so it doesn't block the nav menus */}
       <div className="relative z-0 overflow-hidden rounded-xl border border-zinc-200 bg-white">
         <TrackingMap userName={activeUser} poolId={currentPoolId} />
       </div>
 
-      <h2 className="text-xs font-medium tracking-[0.04em] text-zinc-500 uppercase mt-2">Active pools</h2>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {stats.map((stat) => (
+          <article key={stat.label} className="rounded-lg bg-zinc-100 px-3.5 py-3">
+            <p className="mb-1 text-[11px] text-zinc-500">{stat.label}</p>
+            <p className="text-2xl font-medium text-zinc-900">{stat.value}</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">{stat.hint}</p>
+          </article>
+        ))}
+      </div>
+
+      <h2 className="text-xs font-medium tracking-[0.04em] text-zinc-500 uppercase">Active pools</h2>
 
       <div className="flex flex-col gap-2.5">
-        {pools.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
-            <p className="text-[13px] text-zinc-500">No active pools right now.</p>
-          </div>
-        ) : (
-          pools.map((pool) => {
-            const isCreator = pool.creator?.name === activeUser
-            const hasJoined = pool.participants?.some(p => p.name === activeUser)
-            const lobbyFull = pool.spotsLeft === 0 || pool.status === 'FULL'
+        {pools.map((pool) => (
+          <article
+            key={pool.id}
+            className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300"
+          >
+            {/* TOP SECTION: Avatar and Text */}
+            <div className="flex items-start gap-3">
+              <div className="mt-1 flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full border-2 border-white bg-emerald-100 text-[12px] font-bold text-emerald-800">
+                {initials(pool.creator?.name ?? 'User')}
+              </div>
 
-            return (
-              <article
-                key={pool.id}
-                className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-zinc-300"
-              >
-                {/* Top Row: Ride Details and Action Buttons */}
-                <div className="flex w-full items-center gap-3">
-                  <div className="flex">
-                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-white bg-emerald-200 text-[10px] font-medium text-emerald-900">
-                      {initials(pool.creator?.name ?? 'User')}
-                    </div>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-zinc-900">
+                  <span className="truncate">{(pool.creator?.name ?? 'Someone') + "'s pool"}</span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
+                      pool.spotsLeft <= 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {pool.spotsLeft} {pool.spotsLeft === 1 ? 'SPOT' : 'SPOTS'} LEFT
+                  </span>
+                </p>
+                
+                {/* Redesigned Route UI (Vertical Timeline) */}
+                <div className="mt-2 flex flex-col gap-1 text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></div>
+                    <span className="font-medium text-zinc-800">{pool.routeFrom}</span>
                   </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-zinc-900">
-                      {(pool.creator?.name ?? 'Someone') + "'s pool"}{' '}
-                      {pool.status !== 'COMPLETED' && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            pool.spotsLeft <= 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {pool.spotsLeft} {pool.spotsLeft === 1 ? 'spot' : 'spots'} left
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1 text-[11px]">
-                      <span className="font-medium text-zinc-900">{pool.routeFrom}</span>
-                      <span className="text-emerald-600">→</span>
-                      <span className="text-zinc-500">{pool.routeTo}</span>
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">{formatLeavingMeta(pool.leavingAt)}</p>
+                  <div className="ml-1 h-3 border-l-2 border-dashed border-zinc-200"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 shrink-0 rounded-full bg-zinc-400"></div>
+                    <span className="text-zinc-600">{pool.routeTo}</span>
                   </div>
+                </div>
+                
+                <p className="mt-2 inline-block rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600">
+                  {formatLeavingMeta(pool.leavingAt)}
+                </p>
+              </div>
+            </div>
 
-                  <div className="ml-2 flex items-center">
-                    {(() => {
-                      if (pool.status === 'COMPLETED') {
-                        return (
-                          <span className="rounded-md bg-zinc-100 px-3 py-1.5 text-[12px] font-bold text-zinc-500">
-                            Ride Finished
-                          </span>
-                        )
-                      }
+            {/* BOTTOM SECTION: Buttons */}
+            <div className="mt-1 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
+              {(() => {
+                const isCreator = pool.creator?.name === activeUser
+                const hasJoined = pool.participants?.some((p) => p.name === activeUser)
+                const lobbyFull = pool.spotsLeft === 0 || pool.status === 'FULL'
 
-                      if (isCreator) {
-                        return (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={isPending}
-                              onClick={() =>
-                                startTransition(async () => {
-                                  await closePool(pool.id)
-                                  router.refresh()
-                                })
-                              }
-                              className="rounded-md bg-zinc-900 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
-                            >
-                              Mark Reached
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isPending}
-                              onClick={() =>
-                                startTransition(async () => {
-                                  await deletePool(pool.id)
-                                  router.refresh()
-                                })
-                              }
-                              className="rounded-md border border-red-200 px-3 py-1.5 text-[12px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )
-                      }
-
-                      if (hasJoined) {
-                        return (
-                          <button
-                            type="button"
-                            disabled
-                            className="rounded-md bg-zinc-300 px-3 py-1.5 text-[12px] font-medium text-zinc-600"
-                          >
-                            Joined!
-                          </button>
-                        )
-                      }
-
-                      if (lobbyFull) {
-                        return (
-                          <button
-                            type="button"
-                            disabled
-                            className="rounded-md bg-zinc-300 px-3 py-1.5 text-[12px] font-medium text-zinc-600"
-                          >
-                            Lobby Full
-                          </button>
-                        )
-                      }
-
-                      return (
+                if (isCreator) {
+                  return (
+                    <div className="flex w-full flex-col gap-2">
+                      <div className="flex w-full gap-2">
+                        <button className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-[13px] font-medium text-white transition hover:bg-zinc-800">
+                          Mark Reached
+                        </button>
                         <button
-                          type="button"
                           disabled={isPending}
                           onClick={() =>
                             startTransition(async () => {
-                              await joinPool(pool.id)
+                              await deletePool(pool.id)
                               router.refresh()
                             })
                           }
-                          className="rounded-md bg-emerald-600 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                          className="flex-1 rounded-md border border-red-200 bg-white px-3 py-2 text-[13px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          Join pool
+                          Cancel
                         </button>
-                      )
-                    })()}
-                  </div>
-                </div>
+                      </div>
+                      <button className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50">
+                        💬 Open Pool Chat
+                      </button>
+                    </div>
+                  )
+                }
 
-                {/* Bottom Row: Chat Box (Only visible if creator or participant AND ride is active) */}
-                {(isCreator || hasJoined) && pool.status !== 'COMPLETED' && (
-                  <div className="w-full border-t border-zinc-100 pt-1">
-                    <ChatBox poolId={pool.id} userName={activeUser} />
-                  </div>
-                )}
-              </article>
-            )
-          })
-        )}
+                if (hasJoined) {
+                  return (
+                    <div className="flex w-full flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full rounded-md bg-zinc-200 px-3 py-2 text-[13px] font-medium text-zinc-500"
+                      >
+                        Joined!
+                      </button>
+                      <button className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50">
+                        💬 Open Pool Chat
+                      </button>
+                    </div>
+                  )
+                }
+
+                if (lobbyFull) {
+                  return (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full rounded-md bg-zinc-200 px-3 py-2 text-[13px] font-medium text-zinc-500"
+                    >
+                      Lobby Full
+                    </button>
+                  )
+                }
+
+                return (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await joinPool(pool.id)
+                        router.refresh()
+                      })
+                    }
+                    className="w-full rounded-md bg-emerald-600 px-3 py-2 text-[13px] font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Join pool
+                  </button>
+                )
+              })()}
+            </div>
+          </article>
+        ))}
       </div>
 
-      <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
+      <div className="flex flex-col gap-2.5 sm:flex-row">
         <button
           type="button"
           onClick={onRaisePool}
