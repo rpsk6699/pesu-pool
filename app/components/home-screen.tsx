@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { deletePool, joinPool } from '../actions/poolActions'
+import { ChatBox } from './chat-box' // Make sure the filename matches exactly
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
@@ -110,7 +111,7 @@ export function HomeScreen({
               </div>
             </div>
 
-            {/* BOTTOM SECTION: Buttons */}
+            {/* BOTTOM SECTION: Buttons & Chat */}
             <div className="mt-1 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
               {(() => {
                 const isCreator = pool.creator?.name === activeUser
@@ -137,9 +138,7 @@ export function HomeScreen({
                           Cancel
                         </button>
                       </div>
-                      <button className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50">
-                        💬 Open Pool Chat
-                      </button>
+                      <ChatBox poolId={pool.id} userName={activeUser} />
                     </div>
                   )
                 }
@@ -154,9 +153,7 @@ export function HomeScreen({
                       >
                         Joined!
                       </button>
-                      <button className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50">
-                        💬 Open Pool Chat
-                      </button>
+                      <ChatBox poolId={pool.id} userName={activeUser} />
                     </div>
                   )
                 }
