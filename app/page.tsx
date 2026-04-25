@@ -11,11 +11,12 @@ export default async function Home() {
     redirect('/api/auth/signin'); 
   }
 
-  // 1. Calculate the time exactly 1 hour ago
+  // 1. Calculate our cleanup thresholds
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // 2. LAZY CLEANUP: Officially close any pools that are past the 1-hour mark
-  // We do this BEFORE fetching the pools so we don't accidentally fetch stale ones.
+  // 2. LAZY CLEANUP PART A: Close stale pools
+  // Officially close any pools that are past the 1-hour mark
   await prisma.pool.updateMany({
     where: {
       leavingAt: { lt: oneHourAgo },
@@ -26,7 +27,16 @@ export default async function Home() {
     },
   });
 
-  // 3. Fetch the fresh pools AND count them simultaneously
+  // 3. LAZY CLEANUP PART B: Database maintenance
+  // Delete completed pools older than 30 days to save space
+  await prisma.pool.deleteMany({
+    where: {
+      createdAt: { lt: thirtyDaysAgo },
+      status: 'COMPLETED'
+    }
+  });
+
+  // 4. Fetch the fresh pools AND count them simultaneously
   const [activePools, activePoolCount] = await Promise.all([
     prisma.pool.findMany({
       where: { status: { in: ['ACTIVE', 'FULL'] } },

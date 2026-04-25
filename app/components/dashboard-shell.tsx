@@ -23,12 +23,18 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
   const [modalOpen, setModalOpen] = useState(false)
   const [greeting, setGreeting] = useState('Good morning')
 
-  useEffect(() => {
-    const hour = new Date().getHours()
-    if (hour < 12) setGreeting('Good morning')
-    else if (hour < 18) setGreeting('Good afternoon')
-    else setGreeting('Good evening')
-  }, [])
+ // 1. Auto-show the App Guide every time they start a new session/log in
+ useEffect(() => {
+  const hasSeenGuideThisSession = sessionStorage.getItem('hasSeenAppGuide')
+  
+  if (!hasSeenGuideThisSession) {
+    // Slight delay so the map has a second to load before the pop-up
+    const timer = setTimeout(() => setHelpOpen(true), 800)
+    sessionStorage.setItem('hasSeenAppGuide', 'true')
+    
+    return () => clearTimeout(timer)
+  }
+}, [])
 
   const shouldOpenModal = searchParams.get('raisePool') === 'true'
 
