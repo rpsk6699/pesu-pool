@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 
 export default async function Home() {
   const session = await auth();
+  // FAKE DELAY: Remove this after testing!
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   
   // Boot unauthenticated users to the login screen
   if (!session?.user) {
