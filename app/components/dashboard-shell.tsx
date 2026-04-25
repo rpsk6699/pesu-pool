@@ -21,6 +21,14 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [greeting, setGreeting] = useState('Good morning')
+
+  useEffect(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) setGreeting('Good morning')
+    else if (hour < 18) setGreeting('Good afternoon')
+    else setGreeting('Good evening')
+  }, [])
 
   const shouldOpenModal = searchParams.get('raisePool') === 'true'
 
@@ -98,7 +106,7 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
               </button>
               <div>
                 <div className="flex items-center gap-3 mb-0.5">
-                  <div className="topbar-title m-0">Good morning, {userName ?? 'Arjun'}</div>
+                  <div className="topbar-title">{greeting}, {userName ?? 'Meow'}</div>
                   
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
                     <span className="relative flex h-1.5 w-1.5">

@@ -172,3 +172,17 @@ export async function sweepStalePools() {
     },
   })
 }
+export async function completePool(poolId: string) {
+  if (!poolId) return
+  
+  await prisma.pool.update({
+    where: { id: poolId },
+    data: { status: 'COMPLETED' },
+  })
+  
+  // If you added Pusher for auto-refresh, trigger it here too!
+  // await pusher.trigger('global-pools', 'pools-updated', {})
+  
+  revalidatePath('/')
+  revalidatePath('/rides')
+}

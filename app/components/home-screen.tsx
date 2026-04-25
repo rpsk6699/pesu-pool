@@ -1,12 +1,11 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
+import { useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { deletePool, joinPool } from '../actions/poolActions'
-import { ChatBox } from './chat-box' // Make sure the filename matches exactly
+import { deletePool, joinPool, completePool } from '../actions/poolActions'
+import { ChatBox } from './chat-box'
 import PusherClient from 'pusher-js'
-import { useEffect } from 'react' // <--- Add useEffect here
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
@@ -32,9 +31,13 @@ function initials(name: string) {
 function formatLeavingMeta(leavingAt: string | Date) {
   const d = typeof leavingAt === 'string' ? new Date(leavingAt) : leavingAt
   if (Number.isNaN(d.getTime())) return 'leaving soon'
+  
   const diffMs = d.getTime() - Date.now()
   const min = Math.round(diffMs / 60000)
-  if (min <= 1) return 'leaving now'
+
+  if (min < -60) return 'Expired'
+  if (min < 0) return `Left ${Math.abs(min)} min ago`
+  if (min === 0) return 'leaving now'
   if (min < 60) return `leaving in ${min} min`
   const h = Math.round(min / 60)
   return `leaving in ${h} hr`
@@ -53,6 +56,7 @@ export function HomeScreen({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
   // Listen for background database updates and silently refresh the page
   useEffect(() => {
     const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
@@ -71,7 +75,7 @@ export function HomeScreen({
   }, [router])
 
   // Ensure the frontend fallback matches the backend fallback exactly
-  const activeUser = userName || 'Arjun R.'
+  const activeUser = userName || 'Guest'
 
   // Use activeUser to check the database arrays
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
@@ -140,7 +144,16 @@ export function HomeScreen({
                   return (
                     <div className="flex w-full flex-col gap-2">
                       <div className="flex w-full gap-2">
-                        <button className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-[13px] font-medium text-white transition hover:bg-zinc-800">
+                        <button 
+                          disabled={isPending}
+                          onClick={() =>
+                            startTransition(async () => {
+                              await completePool(pool.id)
+                              router.refresh()
+                            })
+                          }
+                          className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-[13px] font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
+                        >
                           Mark Reached
                         </button>
                         <button

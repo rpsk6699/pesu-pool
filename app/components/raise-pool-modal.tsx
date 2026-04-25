@@ -65,6 +65,7 @@ export function RaisePoolModal({
   const [leavingAt, setLeavingAt] = useState('08:15')
   const [maxRiders, setMaxRiders] = useState<number>(2)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   const selected = ROUTES.find((r) => r.id === selectedRoute) ?? ROUTES[0]
   const selectedText = `${selected.from} → ${selected.to}`
@@ -151,6 +152,31 @@ export function RaisePoolModal({
         <form
           onSubmit={async (e) => {
             e.preventDefault()
+            setErrorMsg('') // Clear previous errors
+
+            // Time math validation
+            const [hh, mm] = leavingAt.split(':').map(Number)
+            let selectedDate = new Date()
+            selectedDate.setSeconds(0, 0)
+            selectedDate.setHours(hh, mm)
+            
+            let diffMins = (selectedDate.getTime() - new Date().getTime()) / 60000
+
+            // Handle crossing midnight (e.g. it is 23:50 and they select 00:15)
+            if (diffMins < -1000) {
+              selectedDate.setDate(selectedDate.getDate() + 1)
+              diffMins = (selectedDate.getTime() - new Date().getTime()) / 60000
+            }
+
+            if (diffMins < -5) {
+              setErrorMsg('You cannot schedule a pool in the past.')
+              return
+            }
+            if (diffMins > 30) {
+              setErrorMsg('Pools can only be scheduled up to 30 minutes in advance.')
+              return
+            }
+
             if (isSubmitting) return
             setIsSubmitting(true)
             try {
@@ -160,6 +186,8 @@ export function RaisePoolModal({
               router.refresh()
               onClose()
               afterCreate?.()
+            } catch (err) {
+              setErrorMsg('Failed to create pool. Try again.')
             } finally {
               setIsSubmitting(false)
             }
@@ -234,6 +262,14 @@ export function RaisePoolModal({
             <div className="rounded-md bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-800">
               {selectedText}
             </div>
+            
+            {/* Show error message if time constraint fails */}
+            {errorMsg && (
+              <div className="rounded-md bg-red-50 p-3 text-[12px] font-medium text-red-600 border border-red-100">
+                {errorMsg}
+              </div>
+            )}
+
 
             <button
               type="submit"
