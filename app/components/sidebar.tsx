@@ -1,4 +1,3 @@
-
 'use client'
 
 import Link from 'next/link'
@@ -41,6 +40,16 @@ export function Sidebar({ onHelp, open, setOpen, collapsed }: SidebarProps) {
             {!collapsed ? <span>Home</span> : null}
           </Link>
 
+          {/* NEW: Find Active Pools Button */}
+          <Link
+            className={`${itemBase} ${collapsed ? 'justify-center' : 'justify-start'}`}
+            href="/active-pools"
+            onClick={() => setOpen(false)}
+          >
+            <span className="w-5 text-center">🔍</span>
+            {!collapsed ? <span>Find Active Pools</span> : null}
+          </Link>
+
           <Link
             className={`${itemBase} w-full ${collapsed ? 'justify-center' : 'justify-start'}`}
             href="/?raisePool=true"
@@ -79,10 +88,18 @@ export function Sidebar({ onHelp, open, setOpen, collapsed }: SidebarProps) {
             <span className="w-5 text-center">?</span>
             {!collapsed ? <span>App Guide</span> : null}
           </button>
-        </div>
 
-    </aside>
+          {/* NEW: Feedback Email Link */}
+          <a
+            href="mailto:rahulsharma98172@gmail.com?subject=PES Pool App Feedback"
+            className={`${itemBase} w-full ${collapsed ? 'justify-center' : 'justify-start'} mt-auto`}
+            onClick={() => setOpen(false)}
+          >
+            <span className="w-5 text-center">✉</span>
+            {!collapsed ? <span>Feedback</span> : null}
+          </a>
+        </div>
+      </aside>
     </>
   )
 }
-
