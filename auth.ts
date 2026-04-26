@@ -47,8 +47,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true 
     },
   },
-  // ADDED: This overrides the default NextAuth login page
+  // ADD THIS BACK: Point it to a separate login folder
   pages: {
-    signIn: "/", 
+    signIn: "/login",
   },
 })
