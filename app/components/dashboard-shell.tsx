@@ -21,35 +21,43 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [greeting, setGreeting] = useState('Good morning')
+  const [greeting, setGreeting] = useState('Good evening') // Initialize with a safe default
 
- // 1. Auto-show the App Guide every time they start a new session/log in
- useEffect(() => {
-  const hasSeenGuideThisSession = sessionStorage.getItem('hasSeenAppGuide')
-  
-  if (!hasSeenGuideThisSession) {
-    // Slight delay so the map has a second to load before the pop-up
-    const timer = setTimeout(() => setHelpOpen(true), 800)
-    sessionStorage.setItem('hasSeenAppGuide', 'true')
-    
-    return () => clearTimeout(timer)
-  }
-}, [])
-
-  const shouldOpenModal = searchParams.get('raisePool') === 'true'
-
-  // 1. Auto-show the App Guide on first login
+  // 1. Dynamic Greeting based on Bengaluru time (IST)
   useEffect(() => {
-    const hasSeenGuide = localStorage.getItem('hasSeenAppGuide')
-    if (!hasSeenGuide) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hour12: false,
+    })
+    
+    const currentHour = parseInt(formatter.format(new Date()), 10)
+
+    if (currentHour >= 5 && currentHour < 12) {
+      setGreeting('Good morning')
+    } else if (currentHour >= 12 && currentHour < 17) {
+      setGreeting('Good afternoon')
+    } else {
+      setGreeting('Good evening')
+    }
+  }, [])
+
+  // 2. Auto-show the App Guide every time they start a new session
+  useEffect(() => {
+    const hasSeenGuideThisSession = sessionStorage.getItem('hasSeenAppGuide')
+    
+    if (!hasSeenGuideThisSession) {
       // Slight delay so the map has a second to load before the pop-up
       const timer = setTimeout(() => setHelpOpen(true), 800)
-      localStorage.setItem('hasSeenAppGuide', 'true')
+      sessionStorage.setItem('hasSeenAppGuide', 'true')
+      
       return () => clearTimeout(timer)
     }
   }, [])
 
-  // 2. Original Raise Pool modal logic
+  // 3. Original Raise Pool modal logic
+  const shouldOpenModal = searchParams.get('raisePool') === 'true'
+  
   useEffect(() => {
     if (!shouldOpenModal) return
     const t = window.setTimeout(() => setModalOpen(true), 0)
