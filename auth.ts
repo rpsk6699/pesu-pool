@@ -29,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: profile.sub || profile.oid,
           name: cleanName || "PESU Student",
           email: profile.preferred_username || profile.email,
-         // image: profile.picture,
+          // image: profile.picture,
         }
       }
     }),
@@ -46,5 +46,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true 
     },
+  },
+  // ADDED: This overrides the default NextAuth login page
+  pages: {
+    signIn: "/", 
   },
 })
