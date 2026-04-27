@@ -252,4 +252,32 @@ export async function completePool(poolId: string) {
   
   revalidatePath('/')
   revalidatePath('/rides')
+  
+}
+export async function autoCancelEmptyPools() {
+  const now = new Date()
+
+  // 1. Find pools where the time has passed, it's still ACTIVE, and NO ONE joined
+  const expiredEmptyPools = await prisma.pool.findMany({
+    where: {
+      leavingAt: { lt: now },
+      status: 'ACTIVE',
+      participants: { none: {} } // This checks if the participants array is completely empty!
+    },
+    select: { id: true }
+  })
+
+  // 2. If we found any ghost pools, delete them and trigger a live refresh
+  if (expiredEmptyPools.length > 0) {
+    const idsToDelete = expiredEmptyPools.map(pool => pool.id)
+
+    await prisma.pool.deleteMany({
+      where: {
+        id: { in: idsToDelete }
+      }
+    })
+
+    // Update everyone's screen so the ghost pools vanish instantly
+    await pusher.trigger('global-pools', 'pools-updated', {})
+  }
 }

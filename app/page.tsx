@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { HomeClient } from "./home-client";
 import { auth } from "../auth";
 import { redirect } from 'next/navigation';
+import { autoCancelEmptyPools } from "./actions/poolActions"; // <-- 1. ADDED IMPORT
 
 export default async function Home() {
   const session = await auth();
@@ -15,7 +16,11 @@ export default async function Home() {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // 2. LAZY CLEANUP PART A: Close stale pools
+  // 2. NEW LAZY CLEANUP: Delete ghost pools 
+  // Vaporize pools where the meeting time has passed but nobody joined
+  await autoCancelEmptyPools();
+
+  // 3. LAZY CLEANUP PART A: Close stale pools
   // Officially close any pools that are past the 1-hour mark
   await prisma.pool.updateMany({
     where: {
@@ -27,7 +32,7 @@ export default async function Home() {
     },
   });
 
-  // 3. LAZY CLEANUP PART B: Database maintenance
+  // 4. LAZY CLEANUP PART B: Database maintenance
   // Delete completed pools older than 30 days to save space
   await prisma.pool.deleteMany({
     where: {
@@ -36,7 +41,7 @@ export default async function Home() {
     }
   });
 
-  // 4. Fetch the fresh pools AND count them simultaneously
+  // 5. Fetch the fresh pools AND count them simultaneously
   const [activePools, activePoolCount] = await Promise.all([
     prisma.pool.findMany({
       where: { status: { in: ['ACTIVE', 'FULL'] } },
