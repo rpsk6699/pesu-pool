@@ -75,6 +75,22 @@ export async function createPool(formData: FormData) {
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
+  // --- THE BACKEND BOUNCER ---
+  // Check if this user is already the creator of a pool that is ACTIVE or FULL
+  const existingPool = await prisma.pool.findFirst({
+    where: {
+      creatorId: user.id,
+      status: {
+        in: ['ACTIVE', 'FULL'] 
+      }
+    },
+  })
+
+  if (existingPool) {
+    throw new Error('You already have an active pool. Please cancel or complete it first.')
+  }
+  // ---------------------------
+
   await prisma.pool.create({
     data: {
       creatorId: user.id,

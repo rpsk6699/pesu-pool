@@ -45,12 +45,12 @@ function formatLeavingMeta(leavingAt: string | Date) {
 }
 
 export function HomeScreen({
-  onRaisePool, // <-- RESTORED
+  onRaisePool,
   pools,
   activePoolCount,
   userName,
 }: {
-  onRaisePool: () => void // <-- RESTORED
+  onRaisePool: () => void 
   pools: HomePool[]
   activePoolCount: number
   userName?: string | null
@@ -75,6 +75,12 @@ export function HomeScreen({
   }, [router])
 
   const activeUser = userName || 'Guest'
+  
+  // --- FRONTEND BOUNCER CHECK ---
+  // Check if this exact user is already the creator of ANY active pool in the list
+  const hasCreatedActivePool = pools.some(pool => pool.creator?.name === activeUser)
+  // ------------------------------
+  
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
   const currentPoolId = activePool?.id || null
 
@@ -220,14 +226,19 @@ export function HomeScreen({
         ))}
       </div>
 
-      {/* RESTORED NATIVE BUTTON TO PREVENT LINK ROUTING BUGS */}
+      {/* SMART RAISE POOL BUTTON */}
       <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
         <button
           type="button"
-          onClick={onRaisePool}
-          className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1 active:scale-[0.98]"
+          disabled={hasCreatedActivePool}
+          onClick={hasCreatedActivePool ? undefined : onRaisePool}
+          className={`flex w-full items-center justify-center rounded-md border px-3 py-2.5 text-[13px] font-medium transition shadow-sm sm:flex-1 ${
+            hasCreatedActivePool
+              ? 'cursor-not-allowed bg-zinc-200 border-zinc-200 text-zinc-500' // Disabled grey state
+              : 'cursor-pointer bg-emerald-600 border-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 active:scale-[0.98]'
+          }`}
         >
-          + Raise a pool
+          {hasCreatedActivePool ? 'You already have an active pool' : '+ Raise a pool'}
         </button>
       </div>
     </div>
