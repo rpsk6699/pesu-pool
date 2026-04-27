@@ -1,11 +1,13 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTransition, useEffect } from 'react'
+import { useTransition } from 'react'
+import Link from 'next/link' // <-- Added for Method 1
 import dynamic from 'next/dynamic'
 import { deletePool, joinPool, completePool } from '../actions/poolActions'
 import { ChatBox } from './chat-box'
-import { LeavePoolButton } from './leave-pool-button' // <-- Added this import!
+import { LeavePoolButton } from './leave-pool-button'
 import PusherClient from 'pusher-js'
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
@@ -19,8 +21,8 @@ export type HomePool = {
   spotsTotal: number
   leavingAt: string | Date
   status: string
-  creator: { name?: string | null } | null
-  participants?: { name?: string | null }[] 
+  creator: { name?: string | null; email?: string | null } | null
+  participants?: { name?: string | null; email?: string | null }[] 
 }
 
 function initials(name: string) {
@@ -45,12 +47,9 @@ function formatLeavingMeta(leavingAt: string | Date) {
 }
 
 export function HomeScreen({
-  onRaisePool,
   pools,
-  activePoolCount,
   userName,
 }: {
-  onRaisePool: () => void
   pools: HomePool[]
   activePoolCount: number
   userName?: string | null
@@ -58,7 +57,7 @@ export function HomeScreen({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  // Listen for background database updates and silently refresh the page
+  // Listen for background database updates
   useEffect(() => {
     const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
@@ -66,7 +65,6 @@ export function HomeScreen({
     
     const channel = pusher.subscribe('global-pools')
     channel.bind('pools-updated', () => {
-      // This tells Next.js to fetch the fresh server data without reloading the browser!
       router.refresh() 
     })
 
@@ -75,16 +73,12 @@ export function HomeScreen({
     }
   }, [router])
 
-  // Ensure the frontend fallback matches the backend fallback exactly
   const activeUser = userName || 'Guest'
-
-  // Use activeUser to check the database arrays
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
   const currentPoolId = activePool?.id || null
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Map isolated with z-0 so it doesn't block the nav menus */}
       <div className="relative z-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <TrackingMap userName={activeUser} poolId={currentPoolId} />
       </div>
@@ -97,7 +91,6 @@ export function HomeScreen({
             key={pool.id}
             className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300"
           >
-            {/* TOP SECTION: Avatar and Text */}
             <div className="flex items-start gap-3">
               <div className="mt-1 flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full border-2 border-white bg-emerald-100 text-[12px] font-bold text-emerald-800">
                 {initials(pool.creator?.name ?? 'User')}
@@ -115,7 +108,6 @@ export function HomeScreen({
                   </span>
                 </p>
                 
-                {/* Redesigned Route UI (Vertical Timeline) */}
                 <div className="mt-2 flex flex-col gap-1 text-[13px]">
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></div>
@@ -134,7 +126,6 @@ export function HomeScreen({
               </div>
             </div>
 
-            {/* BOTTOM SECTION: Buttons & Chat */}
             <div className="mt-1 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
               {(() => {
                 const isCreator = pool.creator?.name === activeUser
@@ -186,8 +177,6 @@ export function HomeScreen({
                         >
                           Joined!
                         </button>
-                        
-                        {/* Swapped in the new Leave Button right next to "Joined!" */}
                         <div className="flex-1">
                           <LeavePoolButton poolId={pool.id} />
                         </div>
@@ -230,14 +219,14 @@ export function HomeScreen({
         ))}
       </div>
 
+      {/* METHOD 1 FIX: Replaced regular button with Link for reliability */}
       <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
-        <button
-          type="button"
-          onClick={onRaisePool}
-          className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1"
+        <Link
+          href="/?raisePool=true"
+          className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1 active:scale-[0.98]"
         >
           + Raise a pool
-        </button>
+        </Link>
       </div>
     </div>
   )

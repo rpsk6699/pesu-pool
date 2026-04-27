@@ -21,75 +21,48 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [greeting, setGreeting] = useState('Good evening') // Initialize with a safe default
+  const [greeting, setGreeting] = useState('Good evening')
 
-  // 1. Dynamic Greeting based on Bengaluru time (IST)
+  // 1. Dynamic Greeting (IST)
   useEffect(() => {
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Kolkata',
       hour: 'numeric',
       hour12: false,
     })
-    
     const currentHour = parseInt(formatter.format(new Date()), 10)
-
-    if (currentHour >= 5 && currentHour < 12) {
-      setGreeting('Good morning')
-    } else if (currentHour >= 12 && currentHour < 17) {
-      setGreeting('Good afternoon')
-    } else {
-      setGreeting('Good evening')
-    }
+    if (currentHour >= 5 && currentHour < 12) setGreeting('Good morning')
+    else if (currentHour >= 12 && currentHour < 17) setGreeting('Good afternoon')
+    else setGreeting('Good evening')
   }, [])
 
-  // 2. Auto-show the App Guide every time they start a new session
+  // 2. Auto-show Guide
   useEffect(() => {
-    const hasSeenGuideThisSession = sessionStorage.getItem('hasSeenAppGuide')
-    
-    if (!hasSeenGuideThisSession) {
-      // Slight delay so the map has a second to load before the pop-up
+    const hasSeenGuide = sessionStorage.getItem('hasSeenAppGuide')
+    if (!hasSeenGuide) {
       const timer = setTimeout(() => setHelpOpen(true), 800)
       sessionStorage.setItem('hasSeenAppGuide', 'true')
-      
       return () => clearTimeout(timer)
     }
   }, [])
 
-  // 3. Original Raise Pool modal logic
-  const shouldOpenModal = searchParams.get('raisePool') === 'true'
-  
+  // 3. Method 1: URL Parameter Sync
+  // This effect watches the URL and opens/closes the modal automatically
   useEffect(() => {
-    if (!shouldOpenModal) return
-    const t = window.setTimeout(() => setModalOpen(true), 0)
-    return () => window.clearTimeout(t)
-  }, [shouldOpenModal])
+    const shouldOpen = searchParams.get('raisePool') === 'true'
+    setModalOpen(shouldOpen)
+  }, [searchParams])
 
   const closeModal = () => {
     setModalOpen(false)
-    router.push('/')
+    // This clears the URL param so the modal doesn't re-open on refresh
+    router.push('/') 
   }
 
-  const routes = useMemo(
-    () => ({
-      from: [
-        'Mysore Road Metro',
-        'Attiguppe Metro Station',
-        'Nayandahalli Metro',
-        'PESU Front Gate',
-        'PESU Back Gate',
-        'RR Nagar Arch',
-      ],
-      to: [
-        'Mysore Road Metro',
-        'Attiguppe Metro Station',
-        'Nayandahalli Metro',
-        'PESU Front Gate',
-        'PESU Back Gate',
-        'RR Nagar Arch',
-      ],
-    }),
-    [],
-  )
+  const routes = useMemo(() => ({
+    from: ['Mysore Road Metro', 'Attiguppe Metro Station', 'Nayandahalli Metro', 'PESU Front Gate', 'PESU Back Gate', 'RR Nagar Arch'],
+    to: ['Mysore Road Metro', 'Attiguppe Metro Station', 'Nayandahalli Metro', 'PESU Front Gate', 'PESU Back Gate', 'RR Nagar Arch'],
+  }), [])
 
   return (
     <div className="min-h-screen bg-zinc-50 p-4 md:p-8">
@@ -106,22 +79,17 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                aria-label="Toggle sidebar"
                 onClick={() => {
-                  if (window.matchMedia('(min-width: 768px)').matches) {
-                    setSidebarCollapsed((v) => !v)
-                  } else {
-                    setSidebarOpen(true)
-                  }
+                  if (window.matchMedia('(min-width: 768px)').matches) setSidebarCollapsed((v) => !v)
+                  else setSidebarOpen(true)
                 }}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-900 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-900 transition hover:bg-zinc-100"
               >
-                <span aria-hidden="true">☰</span>
+                <span>☰</span>
               </button>
               <div>
                 <div className="flex items-center gap-3 mb-0.5">
                   <div className="topbar-title">{greeting}, {userName ?? 'Meow'}</div>
-                  
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
@@ -130,7 +98,6 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
                     {liveUserCount} / 100 Live Users
                   </div>
                 </div>
-
                 <div className="topbar-sub">{activePoolCount} active pools near you</div>
               </div>
             </div>
