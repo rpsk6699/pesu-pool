@@ -63,7 +63,6 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // THE FIX: Explicitly sending 'userName' so the backend doesn't complain about missing data
         body: JSON.stringify({
           poolId: poolId,
           userName: userName,
@@ -94,7 +93,7 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
     )
   }
 
-  // Calculate remaining messages
+  // Calculate remaining messages (System messages do not count towards the limit)
   const myMessageCount = messages.filter((m) => m.sender?.name === userName).length
   const messagesLeft = Math.max(0, 15 - myMessageCount)
   const isLimitReached = messagesLeft === 0
@@ -118,7 +117,21 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
           <p className="text-center text-[11px] text-zinc-400 mt-4">No messages yet. Keep it brief!</p>
         ) : (
           messages.map((msg) => {
+            // --- NEW LOGIC: Check for WhatsApp-style System Messages ---
+            const isSystem = msg.sender?.name === 'System'
             const isMe = msg.sender?.name === userName
+
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="my-1 flex justify-center">
+                  <div className="rounded-lg bg-zinc-200/70 px-3 py-1 text-[10px] font-medium text-zinc-600 shadow-sm">
+                    {msg.text}
+                  </div>
+                </div>
+              )
+            }
+            // -----------------------------------------------------------
+
             return (
               <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                 <span className="text-[9px] text-zinc-400 mb-0.5">{msg.sender?.name ?? 'Someone'}</span>
@@ -150,4 +163,5 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
         </button>
       </form>
     </div>
-  )}
+  )
+}

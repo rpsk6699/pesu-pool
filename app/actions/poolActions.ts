@@ -19,7 +19,6 @@ const TEST_USER = {
 }
 
 function combineTodayWithTime(time: string) {
-  // 1. Get the current date exactly as it is in Bengaluru right now
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
@@ -27,21 +26,14 @@ function combineTodayWithTime(time: string) {
     day: '2-digit'
   })
   
-  // Intl format for en-US is MM/DD/YYYY, so we extract the pieces
   const parts = formatter.formatToParts(new Date())
   const year = parts.find(p => p.type === 'year')?.value
   const month = parts.find(p => p.type === 'month')?.value
   const day = parts.find(p => p.type === 'day')?.value
 
-  // 2. Forcefully construct an ISO string locked to IST (+05:30)
-  // This looks like: "2024-11-20T18:30:00+05:30"
   const exactIstTime = `${year}-${month}-${day}T${time}:00+05:30`
-  
-  // Now, no matter where Vercel's servers are, this Date is perfectly accurate
   const d = new Date(exactIstTime)
   
-  // 3. If the selected time is more than an hour in the past, 
-  // they obviously mean tomorrow, so push the date forward 1 day!
   if (d.getTime() < Date.now() - 60 * 60 * 1000) {
     d.setDate(d.getDate() + 1)
   }
@@ -75,8 +67,6 @@ export async function createPool(formData: FormData) {
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
-  // --- THE BACKEND BOUNCER ---
-  // Check if this user is already the creator of a pool that is ACTIVE or FULL
   const existingPool = await prisma.pool.findFirst({
     where: {
       creatorId: user.id,
@@ -89,7 +79,6 @@ export async function createPool(formData: FormData) {
   if (existingPool) {
     throw new Error('You already have an active pool. Please cancel or complete it first.')
   }
-  // ---------------------------
 
   await prisma.pool.create({
     data: {
@@ -120,7 +109,6 @@ export async function deletePool(poolId: string) {
 export async function joinPool(poolId: string) {
   if (!poolId) return
 
-  // 1. Figure out who is clicking the join button
   const session = await auth()
   const sessionEmail = session?.user?.email ?? null
   const sessionName = session?.user?.name ?? null
@@ -130,14 +118,12 @@ export async function joinPool(poolId: string) {
     name: sessionName ?? TEST_USER.name,
   }
 
-  // Ensure the user exists in the database
   const user = await prisma.user.upsert({
     where: { email: effectiveUser.email },
     update: { name: effectiveUser.name },
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
-  // 2. Find the pool to make sure it has spots left
   const pool = await prisma.pool.findUnique({
     where: { id: poolId },
     include: { participants: true },
@@ -149,14 +135,12 @@ export async function joinPool(poolId: string) {
     return
   }
 
-  // Prevent a user from joining the same pool twice
   if (pool.participants.some((p: { id: string }) => p.id === user.id)) {
     await pusher.trigger('global-pools', 'pools-updated', {})
     revalidatePath('/')
     return
   }
 
-  // 3. Update the pool: subtract a spot, update status if full, AND link the user
   const newSpotsLeft = pool.spotsLeft - 1
   await prisma.pool.update({
     where: { id: poolId },
@@ -164,10 +148,33 @@ export async function joinPool(poolId: string) {
       spotsLeft: newSpotsLeft,
       status: newSpotsLeft === 0 ? 'FULL' : pool.status,
       participants: {
-        connect: { id: user.id }, // <--- This permanently saves the user to the pool!
+        connect: { id: user.id }, 
       },
     },
   })
+
+// --- NEW: WHATSAPP STYLE JOIN MESSAGE ---
+try {
+  // 1. Create or get the automated System user
+  const systemUser = await prisma.user.upsert({
+    where: { email: 'system@app.local' },
+    update: {},
+    create: { name: 'System', email: 'system@app.local' },
+  })
+
+  // 2. Send the message attached to the System user's ID
+  await prisma.message.create({
+    data: {
+      poolId: poolId,
+      senderId: systemUser.id, // Fixed: Using proper relational ID
+      text: `${effectiveUser.name} joined the pool! 👋`,
+    }
+  })
+  await pusher.trigger(poolId, 'new-message', {})
+} catch (error) {
+  console.error("Failed to send join message:", error)
+}
+// ----------------------------------------
 
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
@@ -176,7 +183,6 @@ export async function joinPool(poolId: string) {
 export async function leavePool(poolId: string) {
   if (!poolId) return
 
-  // 1. Figure out who is clicking the leave button
   const session = await auth()
   const sessionEmail = session?.user?.email ?? null
   const sessionName = session?.user?.name ?? null
@@ -186,14 +192,12 @@ export async function leavePool(poolId: string) {
     name: sessionName ?? TEST_USER.name,
   }
 
-  // Ensure we have the user's DB record to get their ID
   const user = await prisma.user.upsert({
     where: { email: effectiveUser.email },
     update: { name: effectiveUser.name },
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
-  // 2. Find the pool
   const pool = await prisma.pool.findUnique({
     where: { id: poolId },
     include: { participants: true },
@@ -201,11 +205,9 @@ export async function leavePool(poolId: string) {
 
   if (!pool) return
 
-  // Verify the user is actually in this pool before trying to remove them
   const isParticipant = pool.participants.some((p: { id: string }) => p.id === user.id)
   if (!isParticipant) return
 
-  // 3. Update the pool: remove the user, add a spot back, and set to ACTIVE if it was FULL
   const newSpotsLeft = pool.spotsLeft + 1
   await prisma.pool.update({
     where: { id: poolId },
@@ -213,15 +215,34 @@ export async function leavePool(poolId: string) {
       spotsLeft: newSpotsLeft,
       status: pool.status === 'FULL' ? 'ACTIVE' : pool.status,
       participants: {
-        disconnect: { id: user.id }, // Breaks the link between user and pool
+        disconnect: { id: user.id }, 
       },
     },
   })
 
-  // BUG 1 FIX: Tell the map exactly who left so it removes their pin instantly
   await pusher.trigger(poolId, 'user-left', { userId: effectiveUser.name })
 
-  // 4. Trigger live updates so the open spot appears instantly
+// --- NEW: WHATSAPP STYLE LEAVE MESSAGE ---
+try {
+  const systemUser = await prisma.user.upsert({
+    where: { email: 'system@app.local' },
+    update: {},
+    create: { name: 'System', email: 'system@app.local' },
+  })
+
+  await prisma.message.create({
+    data: {
+      poolId: poolId,
+      senderId: systemUser.id, // Fixed: Using proper relational ID
+      text: `${effectiveUser.name} left the pool. 🚪`,
+    }
+  })
+  await pusher.trigger(poolId, 'new-message', {})
+} catch (error) {
+  console.error("Failed to send leave message:", error)
+}
+// -----------------------------------------
+
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
   revalidatePath('/rides')
@@ -230,13 +251,11 @@ export async function leavePool(poolId: string) {
 export async function closePool(poolId: string) {
   if (!poolId) return
 
-  // 1. Change the status to keep it for the user's history
   await prisma.pool.update({
     where: { id: poolId },
     data: { status: 'COMPLETED' },
   })
 
-  // 2. Erase all chats for privacy
   await prisma.message.deleteMany({
     where: { poolId: poolId },
   })
@@ -246,15 +265,12 @@ export async function closePool(poolId: string) {
 }
 
 export async function sweepStalePools() {
-  // Calculate the time 2 hours ago from right now
   const expirationTime = new Date(Date.now() - 2 * 60 * 60 * 1000)
 
-  // Find any pools that are incredibly old and wipe them from existence
-  // (Because we set up Cascade deletion earlier, this deletes their chats too!)
   await prisma.pool.deleteMany({
     where: {
       leavingAt: { lt: expirationTime },
-      status: { not: 'COMPLETED' }, // Don't delete successfully completed history!
+      status: { not: 'COMPLETED' }, 
     },
   })
 }
@@ -271,24 +287,20 @@ export async function completePool(poolId: string) {
   
   revalidatePath('/')
   revalidatePath('/rides')
-  
 }
 
 export async function autoCancelEmptyPools() {
-  // BUG 2 FIX: Added a 15-minute grace period!
   const gracePeriodTime = new Date(Date.now() - 15 * 60 * 1000)
 
-  // 1. Find pools where the GRACE PERIOD has passed, it's still ACTIVE, and NO ONE joined
   const expiredEmptyPools = await prisma.pool.findMany({
     where: {
       leavingAt: { lt: gracePeriodTime },
       status: 'ACTIVE',
-      participants: { none: {} } // This checks if the participants array is completely empty!
+      participants: { none: {} } 
     },
     select: { id: true }
   })
 
-  // 2. If we found any ghost pools, delete them and trigger a live refresh
   if (expiredEmptyPools.length > 0) {
     const idsToDelete = expiredEmptyPools.map(pool => pool.id)
 
@@ -298,7 +310,6 @@ export async function autoCancelEmptyPools() {
       }
     })
 
-    // Update everyone's screen so the ghost pools vanish instantly
     await pusher.trigger('global-pools', 'pools-updated', {})
   }
 }
