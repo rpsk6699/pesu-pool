@@ -29,7 +29,13 @@ export function HomeClient({ initialPools, activePoolCount, userName }: HomeClie
         pools={initialPools}
         activePoolCount={activePoolCount}
         userName={userName}
-        onRaisePool={() => router.push('/?raisePool=true')}
+        onRaisePool={() => {
+          // 1. Tell the Dashboard Shell to open the modal instantly
+          window.dispatchEvent(new Event('openRaiseModal'))
+          
+          // 2. Silently update the URL so if they refresh, it stays open!
+          window.history.pushState(null, '', '/?raisePool=true')
+        }}
       />
     </DashboardShell>
   )

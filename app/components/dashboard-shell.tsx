@@ -46,22 +46,29 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
     }
   }, [])
 
-  // THE RESTORED TIMEOUT LOGIC: Fixes the modal not opening bug
+  // --- NEW BULLETPROOF MODAL LOGIC ---
+
+  // 1. Catch direct links or page refreshes
   const shouldOpenModal = searchParams.get('raisePool') === 'true'
-  
   useEffect(() => {
-    if (shouldOpenModal) {
-      const t = window.setTimeout(() => setModalOpen(true), 10)
-      return () => window.clearTimeout(t)
-    } else {
-      setModalOpen(false)
-    }
+    if (shouldOpenModal) setModalOpen(true)
   }, [shouldOpenModal])
 
+  // 2. Catch the instant button click from the Home Screen
+  useEffect(() => {
+    const handleOpen = () => setModalOpen(true)
+    window.addEventListener('openRaiseModal', handleOpen)
+    
+    return () => window.removeEventListener('openRaiseModal', handleOpen)
+  }, [])
+
+  // 3. Close the modal instantly and silently clean the URL
   const closeModal = () => {
     setModalOpen(false)
-    router.push('/')
+    window.history.pushState(null, '', '/') 
   }
+
+  // ------------------------------------
 
   const routes = useMemo(() => ({
     from: ['Mysore Road Metro', 'Attiguppe Metro Station', 'Nayandahalli Metro', 'PESU Front Gate', 'PESU Back Gate', 'RR Nagar Arch'],
