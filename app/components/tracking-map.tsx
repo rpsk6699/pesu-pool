@@ -58,7 +58,10 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
 
   // 2. Geolocation Broadcaster
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      console.error("Geolocation not supported by this browser.");
+      return;
+    }
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -76,11 +79,17 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
               lat: latitude,
               lng: longitude,
             }),
-          });
+          }).catch(err => console.error("Broadcast failed:", err));
         }
       },
-      (error) => console.error("Error watching location:", error),
-      { enableHighAccuracy: true, maximumAge: 10000 }
+      (error) => {
+        console.error("Error watching location:", error.message);
+      },
+      { 
+        enableHighAccuracy: true, 
+        maximumAge: 10000, 
+        timeout: 10000 // THE FIX: Forces iOS to return a location within 10 seconds
+      }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);

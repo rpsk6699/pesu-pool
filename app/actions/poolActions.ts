@@ -141,6 +141,58 @@ export async function joinPool(poolId: string) {
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
 }
+
+export async function leavePool(poolId: string) {
+  if (!poolId) return
+
+  // 1. Figure out who is clicking the leave button
+  const session = await auth()
+  const sessionEmail = session?.user?.email ?? null
+  const sessionName = session?.user?.name ?? null
+
+  const effectiveUser = {
+    email: sessionEmail ?? TEST_USER.email,
+    name: sessionName ?? TEST_USER.name,
+  }
+
+  // Ensure we have the user's DB record to get their ID
+  const user = await prisma.user.upsert({
+    where: { email: effectiveUser.email },
+    update: { name: effectiveUser.name },
+    create: { name: effectiveUser.name, email: effectiveUser.email },
+  })
+
+  // 2. Find the pool
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { participants: true },
+  })
+
+  if (!pool) return
+
+  // Verify the user is actually in this pool before trying to remove them
+  const isParticipant = pool.participants.some((p: { id: string }) => p.id === user.id)
+  if (!isParticipant) return
+
+  // 3. Update the pool: remove the user, add a spot back, and set to ACTIVE if it was FULL
+  const newSpotsLeft = pool.spotsLeft + 1
+  await prisma.pool.update({
+    where: { id: poolId },
+    data: {
+      spotsLeft: newSpotsLeft,
+      status: pool.status === 'FULL' ? 'ACTIVE' : pool.status,
+      participants: {
+        disconnect: { id: user.id }, // Breaks the link between user and pool
+      },
+    },
+  })
+
+  // 4. Trigger live updates so the open spot appears instantly
+  await pusher.trigger('global-pools', 'pools-updated', {})
+  revalidatePath('/')
+  revalidatePath('/rides')
+}
+
 export async function closePool(poolId: string) {
   if (!poolId) return
 
@@ -172,6 +224,7 @@ export async function sweepStalePools() {
     },
   })
 }
+
 export async function completePool(poolId: string) {
   if (!poolId) return
   
@@ -180,8 +233,7 @@ export async function completePool(poolId: string) {
     data: { status: 'COMPLETED' },
   })
   
-  // If you added Pusher for auto-refresh, trigger it here too!
-  // await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger('global-pools', 'pools-updated', {})
   
   revalidatePath('/')
   revalidatePath('/rides')

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import { deletePool } from '../actions/poolActions'
+import { LeavePoolButton } from './leave-pool-button' // <-- ADDED THIS!
 import type { HomePool } from './home-screen'
 
 function initials(name: string) {
@@ -19,7 +20,8 @@ function formatLeavingMeta(leavingAt: string | Date) {
   return `${date} · ${time}`
 }
 
-export function MyRidesScreen({ pools }: { pools: HomePool[] }) {
+// ADDED currentUserEmail TO THE PROPS
+export function MyRidesScreen({ pools, currentUserEmail }: { pools: HomePool[], currentUserEmail: string | null }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -33,62 +35,70 @@ export function MyRidesScreen({ pools }: { pools: HomePool[] }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {pools.map((pool) => (
-            <article
-              key={pool.id}
-              className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-zinc-300"
-            >
-              <div className="flex">
-                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-white bg-emerald-200 text-[10px] font-medium text-emerald-900">
-                  {initials(pool.creator?.name ?? 'User')}
+          {pools.map((pool) => {
+            // Check if the current logged-in user is the one who created this pool
+            const isCreator = (pool.creator as { email?: string | null })?.email === currentUserEmail
+
+            return (
+              <article
+                key={pool.id}
+                className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-zinc-300"
+              >
+                <div className="flex">
+                  <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-white bg-emerald-200 text-[10px] font-medium text-emerald-900">
+                    {initials(pool.creator?.name ?? 'User')}
+                  </div>
                 </div>
-              </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-zinc-900">
-                  {(pool.creator?.name ?? 'User') + "'s pool"}{' '}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      pool.spotsLeft <= 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {pool.spotsLeft} {pool.spotsLeft === 1 ? 'spot' : 'spots'} left
-                  </span>
-                </p>
-                <p className="mt-1 flex items-center gap-1 text-[11px]">
-                  <span className="font-medium text-zinc-900">{pool.routeFrom}</span>
-                  <span className="text-emerald-600">→</span>
-                  <span className="text-zinc-500">{pool.routeTo}</span>
-                </p>
-                <p className="mt-1 text-[11px] text-zinc-500">{formatLeavingMeta(pool.leavingAt)}</p>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-zinc-900">
+                    {(pool.creator?.name ?? 'User') + "'s pool"}{' '}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        pool.spotsLeft <= 1 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {pool.spotsLeft} {pool.spotsLeft === 1 ? 'spot' : 'spots'} left
+                    </span>
+                  </p>
+                  <p className="mt-1 flex items-center gap-1 text-[11px]">
+                    <span className="font-medium text-zinc-900">{pool.routeFrom}</span>
+                    <span className="text-emerald-600">→</span>
+                    <span className="text-zinc-500">{pool.routeTo}</span>
+                  </p>
+                  <p className="mt-1 text-[11px] text-zinc-500">{formatLeavingMeta(pool.leavingAt)}</p>
+                </div>
 
-              <div className="ml-2 flex items-center">
-                {pool.status === 'COMPLETED' ? (
-                  <span className="rounded-md bg-zinc-300 px-3 py-1.5 text-[12px] font-medium text-zinc-700">
-                    Completed
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        await deletePool(pool.id)
-                        router.refresh()
-                      })
-                    }
-                    className="rounded-md border border-red-200 px-3 py-1.5 text-[12px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Delete pool
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
+                <div className="ml-2 flex items-center">
+                  {pool.status === 'COMPLETED' ? (
+                    <span className="rounded-md bg-zinc-300 px-3 py-1.5 text-[12px] font-medium text-zinc-700">
+                      Completed
+                    </span>
+                  ) : isCreator ? (
+                    // IF THEY ARE THE DRIVER: Show Delete button
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          await deletePool(pool.id)
+                          router.refresh()
+                        })
+                      }
+                      className="rounded-md border border-red-200 px-3 py-1.5 text-[12px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Delete pool
+                    </button>
+                  ) : (
+                    // IF THEY ARE A PASSENGER: Show Leave button
+                    <LeavePoolButton poolId={pool.id} />
+                  )}
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
-

@@ -28,7 +28,7 @@ export default async function RidesPage() {
 
   return (
     <DashboardShell userName={session?.user?.name ?? null} activePoolCount={activePoolCount}>
-      <MyRidesScreen pools={userPools} />
+      <MyRidesScreen pools={userPools} currentUserEmail={email} />
     </DashboardShell>
   )
 }
