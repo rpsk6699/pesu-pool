@@ -36,6 +36,7 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
   const [liveUsers, setLiveUsers] = useState<Record<string, { lat: number; lng: number }>>({});
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // 1. Pusher Listener (Only connects if you are in an active pool)
   useEffect(() => {
     if (!poolId) return;
 
@@ -45,6 +46,7 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
 
     const channel = pusher.subscribe(poolId);
 
+    // Listens for live movement
     channel.bind('location-update', (data: { userId: string; lat: number; lng: number }) => {
       if (data.userId !== userName) {
         setLiveUsers((prev) => ({
@@ -54,7 +56,18 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       }
     });
 
-    return () => pusher.unsubscribe(poolId);
+    // NEW FIX: Listens for when someone leaves the pool and erases their pin
+    channel.bind('user-left', (data: { userId: string }) => {
+      setLiveUsers((prev) => {
+        const newUsers = { ...prev };
+        delete newUsers[data.userId]; // Instantly deletes the pin from the map
+        return newUsers;
+      });
+    });
+
+    return () => {
+      pusher.unsubscribe(poolId);
+    };
   }, [poolId, userName]);
 
   useEffect(() => {

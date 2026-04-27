@@ -202,6 +202,9 @@ export async function leavePool(poolId: string) {
     },
   })
 
+  // BUG 1 FIX: Tell the map exactly who left so it removes their pin instantly
+  await pusher.trigger(poolId, 'user-left', { userId: effectiveUser.name })
+
   // 4. Trigger live updates so the open spot appears instantly
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
@@ -254,13 +257,15 @@ export async function completePool(poolId: string) {
   revalidatePath('/rides')
   
 }
-export async function autoCancelEmptyPools() {
-  const now = new Date()
 
-  // 1. Find pools where the time has passed, it's still ACTIVE, and NO ONE joined
+export async function autoCancelEmptyPools() {
+  // BUG 2 FIX: Added a 15-minute grace period!
+  const gracePeriodTime = new Date(Date.now() - 15 * 60 * 1000)
+
+  // 1. Find pools where the GRACE PERIOD has passed, it's still ACTIVE, and NO ONE joined
   const expiredEmptyPools = await prisma.pool.findMany({
     where: {
-      leavingAt: { lt: now },
+      leavingAt: { lt: gracePeriodTime },
       status: 'ACTIVE',
       participants: { none: {} } // This checks if the participants array is completely empty!
     },
