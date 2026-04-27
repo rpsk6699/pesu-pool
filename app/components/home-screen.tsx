@@ -5,6 +5,7 @@ import { useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { deletePool, joinPool, completePool } from '../actions/poolActions'
 import { ChatBox } from './chat-box'
+import { LeavePoolButton } from './leave-pool-button' // <-- Added this import!
 import PusherClient from 'pusher-js'
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
@@ -177,13 +178,20 @@ export function HomeScreen({
                 if (hasJoined) {
                   return (
                     <div className="flex w-full flex-col gap-2">
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full rounded-md bg-zinc-200 px-3 py-2 text-[13px] font-medium text-zinc-500"
-                      >
-                        Joined!
-                      </button>
+                      <div className="flex w-full gap-2">
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 rounded-md bg-zinc-200 px-3 py-2 text-[13px] font-medium text-zinc-500"
+                        >
+                          Joined!
+                        </button>
+                        
+                        {/* Swapped in the new Leave Button right next to "Joined!" */}
+                        <div className="flex-1">
+                          <LeavePoolButton poolId={pool.id} />
+                        </div>
+                      </div>
                       <ChatBox poolId={pool.id} userName={activeUser} />
                     </div>
                   )

@@ -227,7 +227,7 @@ export function RaisePoolModal({
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-zinc-600">Leaving at</span>
+                  <span className="text-[12px] text-zinc-600">Meet At</span>
                   <input
                     type="time"
                     value={leavingAt}
