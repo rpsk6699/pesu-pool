@@ -29,6 +29,7 @@ export function HomeClient({ initialPools, activePoolCount, userName }: HomeClie
         pools={initialPools}
         activePoolCount={activePoolCount}
         userName={userName}
+        onRaisePool={() => router.push('/?raisePool=true')}
       />
     </DashboardShell>
   )

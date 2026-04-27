@@ -1,9 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
-import Link from 'next/link' // <-- Added for Method 1
 import dynamic from 'next/dynamic'
 import { deletePool, joinPool, completePool } from '../actions/poolActions'
 import { ChatBox } from './chat-box'
@@ -47,9 +45,12 @@ function formatLeavingMeta(leavingAt: string | Date) {
 }
 
 export function HomeScreen({
+  onRaisePool, // <-- RESTORED
   pools,
+  activePoolCount,
   userName,
 }: {
+  onRaisePool: () => void // <-- RESTORED
   pools: HomePool[]
   activePoolCount: number
   userName?: string | null
@@ -219,14 +220,15 @@ export function HomeScreen({
         ))}
       </div>
 
-      {/* METHOD 1 FIX: Replaced regular button with Link for reliability */}
+      {/* RESTORED NATIVE BUTTON TO PREVENT LINK ROUTING BUGS */}
       <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
-        <Link
-          href="/?raisePool=true"
+        <button
+          type="button"
+          onClick={onRaisePool}
           className="flex w-full cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2.5 text-[13px] font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:flex-1 active:scale-[0.98]"
         >
           + Raise a pool
-        </Link>
+        </button>
       </div>
     </div>
   )

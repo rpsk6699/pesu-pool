@@ -23,7 +23,7 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
   const [modalOpen, setModalOpen] = useState(false)
   const [greeting, setGreeting] = useState('Good evening')
 
-  // 1. Dynamic Greeting (IST)
+  // Dynamic Greeting (IST)
   useEffect(() => {
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Kolkata',
@@ -36,7 +36,7 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
     else setGreeting('Good evening')
   }, [])
 
-  // 2. Auto-show Guide
+  // Auto-show Guide
   useEffect(() => {
     const hasSeenGuide = sessionStorage.getItem('hasSeenAppGuide')
     if (!hasSeenGuide) {
@@ -46,17 +46,21 @@ export function DashboardShell({ userName, activePoolCount, liveUserCount = 0, c
     }
   }, [])
 
-  // 3. Method 1: URL Parameter Sync
-  // This effect watches the URL and opens/closes the modal automatically
+  // THE RESTORED TIMEOUT LOGIC: Fixes the modal not opening bug
+  const shouldOpenModal = searchParams.get('raisePool') === 'true'
+  
   useEffect(() => {
-    const shouldOpen = searchParams.get('raisePool') === 'true'
-    setModalOpen(shouldOpen)
-  }, [searchParams])
+    if (shouldOpenModal) {
+      const t = window.setTimeout(() => setModalOpen(true), 10)
+      return () => window.clearTimeout(t)
+    } else {
+      setModalOpen(false)
+    }
+  }, [shouldOpenModal])
 
   const closeModal = () => {
     setModalOpen(false)
-    // This clears the URL param so the modal doesn't re-open on refresh
-    router.push('/') 
+    router.push('/')
   }
 
   const routes = useMemo(() => ({
