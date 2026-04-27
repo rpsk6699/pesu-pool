@@ -19,21 +19,30 @@ const TEST_USER = {
 }
 
 function combineTodayWithTime(time: string) {
-  const now = new Date()
-  const [hh, mm] = time.split(':').map((x) => Number.parseInt(x, 10))
-
-  // 1. Get today's exact date in Bengaluru (Formatted as YYYY-MM-DD)
-  const dateStr = new Intl.DateTimeFormat('en-CA', {
+  // 1. Get the current date exactly as it is in Bengaluru right now
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
-  }).format(now)
-
-  // 2. Combine it with the user's time and FORCE the IST offset (+05:30)
-  // This completely stops Vercel from assuming it is UTC time
-  const isoString = `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:30`
-  const d = new Date(isoString)
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
   
-  // 3. If the selected time is more than an hour in the past, they mean tomorrow
-  if (d.getTime() < now.getTime() - 60 * 60 * 1000) {
+  // Intl format for en-US is MM/DD/YYYY, so we extract the pieces
+  const parts = formatter.formatToParts(new Date())
+  const year = parts.find(p => p.type === 'year')?.value
+  const month = parts.find(p => p.type === 'month')?.value
+  const day = parts.find(p => p.type === 'day')?.value
+
+  // 2. Forcefully construct an ISO string locked to IST (+05:30)
+  // This looks like: "2024-11-20T18:30:00+05:30"
+  const exactIstTime = `${year}-${month}-${day}T${time}:00+05:30`
+  
+  // Now, no matter where Vercel's servers are, this Date is perfectly accurate
+  const d = new Date(exactIstTime)
+  
+  // 3. If the selected time is more than an hour in the past, 
+  // they obviously mean tomorrow, so push the date forward 1 day!
+  if (d.getTime() < Date.now() - 60 * 60 * 1000) {
     d.setDate(d.getDate() + 1)
   }
   
