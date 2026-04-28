@@ -76,10 +76,13 @@ export function HomeScreen({
 
   const activeUser = userName || 'Guest'
   
-  // --- FRONTEND BOUNCER CHECK ---
-  // Check if this exact user is already the creator of ANY active pool in the list
-  const hasCreatedActivePool = pools.some(pool => pool.creator?.name === activeUser)
-  // ------------------------------
+  // --- UPGRADED FRONTEND BOUNCER ---
+  // Checks if the user is the creator OR a participant in ANY active pool
+  const isAlreadyInPool = pools.some(pool => 
+    pool.creator?.name === activeUser || 
+    pool.participants?.some(p => p.name === activeUser)
+  )
+  // ---------------------------------
   
   const activePool = pools.find(pool => pool.creator?.name === activeUser) || pools.find(pool => pool.participants?.some(p => p.name === activeUser))
   const currentPoolId = activePool?.id || null
@@ -208,16 +211,20 @@ export function HomeScreen({
                 return (
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || isAlreadyInPool}
                     onClick={() =>
                       startTransition(async () => {
                         await joinPool(pool.id)
                         router.refresh()
                       })
                     }
-                    className="w-full rounded-md bg-emerald-600 px-3 py-2 text-[13px] font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                    className={`w-full rounded-md px-3 py-2 text-[13px] font-medium transition ${
+                      isAlreadyInPool
+                        ? 'cursor-not-allowed bg-zinc-200 text-zinc-500' // Disabled state
+                        : 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50' // Active state
+                    }`}
                   >
-                    Join pool
+                    {isAlreadyInPool ? 'Already in a pool' : 'Join pool'}
                   </button>
                 )
               })()}
@@ -230,15 +237,15 @@ export function HomeScreen({
       <div className="flex flex-col gap-2.5 sm:flex-row mt-2">
         <button
           type="button"
-          disabled={hasCreatedActivePool}
-          onClick={hasCreatedActivePool ? undefined : onRaisePool}
+          disabled={isAlreadyInPool}
+          onClick={isAlreadyInPool ? undefined : onRaisePool}
           className={`flex w-full items-center justify-center rounded-md border px-3 py-2.5 text-[13px] font-medium transition shadow-sm sm:flex-1 ${
-            hasCreatedActivePool
-              ? 'cursor-not-allowed bg-zinc-200 border-zinc-200 text-zinc-500' // Disabled grey state
+            isAlreadyInPool
+              ? 'cursor-not-allowed bg-zinc-200 border-zinc-200 text-zinc-500' 
               : 'cursor-pointer bg-emerald-600 border-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 active:scale-[0.98]'
           }`}
         >
-          {hasCreatedActivePool ? 'You already have an active pool' : '+ Raise a pool'}
+          {isAlreadyInPool ? 'You are currently in a pool' : '+ Raise a pool'}
         </button>
       </div>
     </div>

@@ -6,7 +6,6 @@ import Pusher from 'pusher-js';
 import L from 'leaflet';
 
 // --- BULLETPROOF COLORED PINS ---
-// Caches the icons so the map doesn't flicker or crash when people move
 const pinCache: Record<string, L.Icon> = {};
 
 function getPin(color: string) {
@@ -23,7 +22,6 @@ function getPin(color: string) {
   return pinCache[color];
 }
 
-// Restricted dynamic colors just for other passengers
 const USER_COLORS = ['green', 'red', 'yellow'];
 
 function getPinForUser(userId: string) {
@@ -37,7 +35,7 @@ function getPinForUser(userId: string) {
 // --------------------------------
 
 // --- PRIVACY MATH (Haversine Formula) ---
-const PESU_LAT = 12.9352; // PESU Front Gate
+const PESU_LAT = 12.9352;
 const PESU_LNG = 77.5364;
 
 function deg2rad(deg: number) {
@@ -45,7 +43,7 @@ function deg2rad(deg: number) {
 }
 
 function getDistanceFromPESU(lat: number, lng: number) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371; 
   const dLat = deg2rad(PESU_LAT - lat);
   const dLng = deg2rad(PESU_LNG - lng);
   const a =
@@ -53,7 +51,7 @@ function getDistanceFromPESU(lat: number, lng: number) {
     Math.cos(deg2rad(lat)) * Math.cos(deg2rad(PESU_LAT)) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in km
+  return R * c; 
 }
 // ----------------------------------------
 
@@ -65,6 +63,9 @@ interface TrackingMapProps {
 export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
   const [liveUsers, setLiveUsers] = useState<Record<string, { lat: number; lng: number }>>({});
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
+  // NEW: State to track exactly why the GPS might be failing
+  const [geoError, setGeoError] = useState<string | null>(null); 
 
   // 1. Pusher Listener
   useEffect(() => {
@@ -85,7 +86,6 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       }
     });
 
-    // Instantly remove pins when people leave the pool
     channel.bind('user-left', (data: { userId: string }) => {
       setLiveUsers((prev) => {
         const newState = { ...prev };
@@ -102,21 +102,19 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
   // 2. Geolocation Broadcaster (With 2km Geofence)
   useEffect(() => {
     if (!navigator.geolocation) {
-      console.error("Geolocation not supported by this browser.");
+      setGeoError("Browser does not support GPS");
       return;
     }
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        setGeoError(null); // Clear errors on success
         const { latitude, longitude } = position.coords;
         
-        // Always update local state so the user sees their own black pin
         setMyLocation({ lat: latitude, lng: longitude });
 
-        // PRIVACY GEOFENCE: Check distance to PESU
         const distanceToCampus = getDistanceFromPESU(latitude, longitude);
 
-        // ONLY broadcast to the server if in a pool AND within 2km of PESU
         if (poolId && distanceToCampus <= 2.0) {
           fetch('/api/tracking', {
             method: 'POST',
@@ -132,48 +130,87 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       },
       (error) => {
         console.error("Error watching location:", error.message);
+        // Translate browser error codes into readable UI messages
+        if (error.code === 1) setGeoError("Location permission denied");
+        else if (error.code === 2) setGeoError("Location unavailable");
+        else if (error.code === 3) setGeoError("GPS request timed out");
+        else setGeoError(error.message);
       },
       { 
         enableHighAccuracy: true, 
         maximumAge: 10000, 
-        timeout: 10000
+        timeout: 15000 
       }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, [poolId, userName]);
 
+  const distanceToCampus = myLocation ? getDistanceFromPESU(myLocation.lat, myLocation.lng) : null;
+
   return (
-    <MapContainer
-      center={[12.9407, 77.5332]}
-      zoom={14}
-      style={{ height: '500px', width: '100%', borderRadius: '0.75rem', zIndex: 0 }}
-    >
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+    // We moved the height to this wrapper div so we can layer the UI badges on top of the map
+    <div className="relative h-[500px] w-full rounded-xl overflow-hidden z-0">
+      
+      {/* --- FLOATING STATUS BADGES --- */}
+      <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 pointer-events-none">
+        
+        {/* 1. Privacy Active Badge */}
+        {distanceToCampus !== null && distanceToCampus > 2.0 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[10px] font-bold text-white shadow-md backdrop-blur-md">
+            <span>🛡️</span>
+            <span>Privacy Active (&gt;2km)</span>
+          </div>
+        )}
 
-      {/* Static Route Markers */}
-      <Marker position={[12.9464, 77.5306]} icon={getPin('violet')}><Popup>Mysore Road Metro (PES side)</Popup></Marker>
-      <Marker position={[12.9465, 77.5299]} icon={getPin('violet')}><Popup>Mysore Road Metro (Attiguppe side)</Popup></Marker>
-      <Marker position={[12.9352, 77.5364]} icon={getPin('orange')}><Popup>PESU Front Gate</Popup></Marker>
-      <Marker position={[12.9350, 77.5329]} icon={getPin('orange')}><Popup>PESU Back Gate</Popup></Marker>
+        {/* 2. GPS Error Badge */}
+        {geoError && (
+          <div className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-[10px] font-bold text-red-800 shadow-md border border-red-200">
+            <span>⚠️</span>
+            <span>{geoError}</span>
+          </div>
+        )}
 
-      {/* Your Live Location (Black Pin) */}
-      {myLocation && (
-        <Marker position={[myLocation.lat, myLocation.lng]} icon={getPin('black')}>
-          <Popup>You</Popup>
-        </Marker>
-      )}
+        {/* 3. GPS Loading Badge */}
+        {!myLocation && !geoError && (
+          <div className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-bold text-amber-800 shadow-md border border-amber-200">
+            <span className="flex h-2 w-2">
+              <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+            </span>
+            <span>Acquiring GPS...</span>
+          </div>
+        )}
+      </div>
 
-      {/* Other Pool Members (Dynamic: Green, Red, or Yellow) */}
-      {Object.entries(liveUsers).map(([id, coords]) => (
-        <Marker 
-          key={id} 
-          position={[coords.lat, coords.lng]} 
-          icon={getPinForUser(id)} 
-        >
-          <Popup>{id}</Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+      <MapContainer
+        center={[12.9407, 77.5332]}
+        zoom={14}
+        style={{ height: '100%', width: '100%', zIndex: 0 }}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+        <Marker position={[12.9464, 77.5306]} icon={getPin('violet')}><Popup>Mysore Road Metro (PES side)</Popup></Marker>
+        <Marker position={[12.9465, 77.5299]} icon={getPin('violet')}><Popup>Mysore Road Metro (Attiguppe side)</Popup></Marker>
+        <Marker position={[12.9352, 77.5364]} icon={getPin('orange')}><Popup>PESU Front Gate</Popup></Marker>
+        <Marker position={[12.9350, 77.5329]} icon={getPin('orange')}><Popup>PESU Back Gate</Popup></Marker>
+
+        {myLocation && (
+          <Marker position={[myLocation.lat, myLocation.lng]} icon={getPin('black')}>
+            <Popup>You</Popup>
+          </Marker>
+        )}
+
+        {Object.entries(liveUsers).map(([id, coords]) => (
+          <Marker 
+            key={id} 
+            position={[coords.lat, coords.lng]} 
+            icon={getPinForUser(id)} 
+          >
+            <Popup>{id}</Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
   );
 }

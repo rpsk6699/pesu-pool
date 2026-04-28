@@ -67,18 +67,22 @@ export async function createPool(formData: FormData) {
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
-  const existingPool = await prisma.pool.findFirst({
+  // --- UPGRADED BACKEND BOUNCER (CREATE) ---
+  // Blocks creating a pool if they are a driver OR a passenger in an active one
+  const existingActivePool = await prisma.pool.findFirst({
     where: {
-      creatorId: user.id,
-      status: {
-        in: ['ACTIVE', 'FULL'] 
-      }
+      status: { in: ['ACTIVE', 'FULL'] },
+      OR: [
+        { creatorId: user.id },
+        { participants: { some: { id: user.id } } }
+      ]
     },
   })
 
-  if (existingPool) {
-    throw new Error('You already have an active pool. Please cancel or complete it first.')
+  if (existingActivePool) {
+    throw new Error('You are already part of an active pool. Leave or complete it first.')
   }
+  // -----------------------------------------
 
   await prisma.pool.create({
     data: {
@@ -124,6 +128,23 @@ export async function joinPool(poolId: string) {
     create: { name: effectiveUser.name, email: effectiveUser.email },
   })
 
+  // --- UPGRADED BACKEND BOUNCER (JOIN) ---
+  const existingActivePool = await prisma.pool.findFirst({
+    where: {
+      status: { in: ['ACTIVE', 'FULL'] },
+      OR: [
+        { creatorId: user.id },
+        { participants: { some: { id: user.id } } }
+      ]
+    },
+  })
+
+  if (existingActivePool) {
+    // Silently fail so they can't join a second pool
+    return 
+  }
+  // ---------------------------------------
+
   const pool = await prisma.pool.findUnique({
     where: { id: poolId },
     include: { participants: true },
@@ -153,28 +174,26 @@ export async function joinPool(poolId: string) {
     },
   })
 
-// --- NEW: WHATSAPP STYLE JOIN MESSAGE ---
-try {
-  // 1. Create or get the automated System user
-  const systemUser = await prisma.user.upsert({
-    where: { email: 'system@app.local' },
-    update: {},
-    create: { name: 'System', email: 'system@app.local' },
-  })
+  // --- WHATSAPP STYLE JOIN MESSAGE ---
+  try {
+    const systemUser = await prisma.user.upsert({
+      where: { email: 'system@app.local' },
+      update: {},
+      create: { name: 'System', email: 'system@app.local' },
+    })
 
-  // 2. Send the message attached to the System user's ID
-  await prisma.message.create({
-    data: {
-      poolId: poolId,
-      senderId: systemUser.id, // Fixed: Using proper relational ID
-      text: `${effectiveUser.name} joined the pool! 👋`,
-    }
-  })
-  await pusher.trigger(poolId, 'new-message', {})
-} catch (error) {
-  console.error("Failed to send join message:", error)
-}
-// ----------------------------------------
+    await prisma.message.create({
+      data: {
+        poolId: poolId,
+        senderId: systemUser.id, 
+        text: `${effectiveUser.name} joined the pool! 👋`,
+      }
+    })
+    await pusher.trigger(poolId, 'new-message', {})
+  } catch (error) {
+    console.error("Failed to send join message:", error)
+  }
+  // ----------------------------------------
 
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
@@ -222,26 +241,26 @@ export async function leavePool(poolId: string) {
 
   await pusher.trigger(poolId, 'user-left', { userId: effectiveUser.name })
 
-// --- NEW: WHATSAPP STYLE LEAVE MESSAGE ---
-try {
-  const systemUser = await prisma.user.upsert({
-    where: { email: 'system@app.local' },
-    update: {},
-    create: { name: 'System', email: 'system@app.local' },
-  })
+  // --- WHATSAPP STYLE LEAVE MESSAGE ---
+  try {
+    const systemUser = await prisma.user.upsert({
+      where: { email: 'system@app.local' },
+      update: {},
+      create: { name: 'System', email: 'system@app.local' },
+    })
 
-  await prisma.message.create({
-    data: {
-      poolId: poolId,
-      senderId: systemUser.id, // Fixed: Using proper relational ID
-      text: `${effectiveUser.name} left the pool. 🚪`,
-    }
-  })
-  await pusher.trigger(poolId, 'new-message', {})
-} catch (error) {
-  console.error("Failed to send leave message:", error)
-}
-// -----------------------------------------
+    await prisma.message.create({
+      data: {
+        poolId: poolId,
+        senderId: systemUser.id, 
+        text: `${effectiveUser.name} left the pool. 🚪`,
+      }
+    })
+    await pusher.trigger(poolId, 'new-message', {})
+  } catch (error) {
+    console.error("Failed to send leave message:", error)
+  }
+  // -----------------------------------------
 
   await pusher.trigger('global-pools', 'pools-updated', {})
   revalidatePath('/')
