@@ -284,14 +284,36 @@ export async function closePool(poolId: string) {
 }
 
 export async function sweepStalePools() {
+  // Calculate the time 2 hours ago from right now
   const expirationTime = new Date(Date.now() - 2 * 60 * 60 * 1000)
 
-  await prisma.pool.deleteMany({
+  // 1. Find the stale pools that users forgot to close
+  const stalePools = await prisma.pool.findMany({
     where: {
       leavingAt: { lt: expirationTime },
       status: { not: 'COMPLETED' }, 
     },
+    select: { id: true }
   })
+
+  if (stalePools.length > 0) {
+    const staleIds = stalePools.map(p => p.id)
+
+    // 2. Erase all chats for these forgotten pools to protect privacy
+    await prisma.message.deleteMany({
+      where: { 
+        poolId: { in: staleIds } 
+      }
+    })
+
+    // 3. Mark them as COMPLETED so users keep their ride history
+    await prisma.pool.updateMany({
+      where: { 
+        id: { in: staleIds } 
+      },
+      data: { status: 'COMPLETED' }
+    })
+  }
 }
 
 export async function completePool(poolId: string) {
