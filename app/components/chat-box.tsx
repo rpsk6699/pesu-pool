@@ -19,29 +19,46 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [hasUnread, setHasUnread] = useState(false) // <-- NEW: Tracks unread status
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isOpenRef = useRef(isOpen) // Used to check status inside the Pusher callback
 
+  // Keep the ref perfectly synced with the state
   useEffect(() => {
-    if (!isOpen) return
+    isOpenRef.current = isOpen
+  }, [isOpen])
 
-    // 1. Fetch chat history when opened
-    fetch(`/api/chat?poolId=${poolId}`)
-      .then((res) => res.json())
-      .then((data) => setMessages(data))
-
-    // 2. Connect to Pusher to listen for live messages
+  // 1. Pusher Listener: Always runs in the background to catch notifications
+  useEffect(() => {
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
     })
 
     const channel = pusher.subscribe(poolId)
     channel.bind('new-message', (newMessage: Message) => {
+      // If the chat is closed, trigger the red notification dot!
+      if (!isOpenRef.current) {
+        setHasUnread(true)
+      }
       setMessages((prev) => [...prev, newMessage])
     })
 
     return () => {
       pusher.unsubscribe(poolId)
     }
+  }, [poolId])
+
+  // 2. Fetch History: Only runs when explicitly opened to save API calls
+  useEffect(() => {
+    if (!isOpen) return
+
+    fetch(`/api/chat?poolId=${poolId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setMessages(data)
+        setHasUnread(false) // Clear the notification badge once they look at it
+      })
   }, [isOpen, poolId])
 
   // Auto-scroll to the newest message
@@ -82,18 +99,30 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
     }
   }
 
+  // --- UI FOR CLOSED CHAT BUTTON ---
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[12px] font-medium text-zinc-700 transition hover:bg-zinc-50"
+        onClick={() => {
+          setIsOpen(true)
+          setHasUnread(false) // Instantly hide the dot on click
+        }}
+        className="mt-3 relative flex w-full items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[12px] font-medium text-zinc-700 transition hover:bg-zinc-50"
       >
         <span>💬</span> Open Pool Chat
+
+        {/* The Unread Notification Dot */}
+        {hasUnread && (
+          <span className="absolute right-4 flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500"></span>
+          </span>
+        )}
       </button>
     )
   }
 
-  // Calculate remaining messages (System messages do not count towards the limit)
+  // --- UI FOR OPEN CHAT ---
   const myMessageCount = messages.filter((m) => m.sender?.name === userName).length
   const messagesLeft = Math.max(0, 15 - myMessageCount)
   const isLimitReached = messagesLeft === 0
@@ -107,7 +136,6 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
         </button>
       </div>
 
-      {/* The Constraint Banner */}
       <div className="bg-amber-50 px-3 py-1.5 text-center text-[10px] font-medium text-amber-800 border-b border-amber-100">
         Student App constraints: {messagesLeft} messages remaining.
       </div>
@@ -117,7 +145,6 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
           <p className="text-center text-[11px] text-zinc-400 mt-4">No messages yet. Keep it brief!</p>
         ) : (
           messages.map((msg) => {
-            // --- NEW LOGIC: Check for WhatsApp-style System Messages ---
             const isSystem = msg.sender?.name === 'System'
             const isMe = msg.sender?.name === userName
 
@@ -130,7 +157,6 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
                 </div>
               )
             }
-            // -----------------------------------------------------------
 
             return (
               <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>

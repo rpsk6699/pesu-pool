@@ -5,25 +5,38 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import Pusher from 'pusher-js';
 import L from 'leaflet';
 
-// Fix for missing default Leaflet icons in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+// --- BULLETPROOF COLORED PINS ---
+// Caches the icons so the map doesn't flicker or crash when people move
+const pinCache: Record<string, L.Icon> = {};
 
-// Custom Black Icon for the active user
-const myBlackIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+function getPin(color: string) {
+  if (!pinCache[color]) {
+    pinCache[color] = new L.Icon({
+      iconUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-${color}.png`,
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+  return pinCache[color];
+}
 
-// --- NEW PRIVACY MATH (Haversine Formula) ---
+// Restricted dynamic colors just for other passengers
+const USER_COLORS = ['green', 'red', 'yellow'];
+
+function getPinForUser(userId: string) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % USER_COLORS.length;
+  return getPin(USER_COLORS[index]);
+}
+// --------------------------------
+
+// --- PRIVACY MATH (Haversine Formula) ---
 const PESU_LAT = 12.9352; // PESU Front Gate
 const PESU_LNG = 77.5364;
 
@@ -42,7 +55,7 @@ function getDistanceFromPESU(lat: number, lng: number) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in km
 }
-// --------------------------------------------
+// ----------------------------------------
 
 interface TrackingMapProps {
   userName: string;
@@ -53,7 +66,7 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
   const [liveUsers, setLiveUsers] = useState<Record<string, { lat: number; lng: number }>>({});
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  // 1. Pusher Listener (Only connects if you are in an active pool)
+  // 1. Pusher Listener
   useEffect(() => {
     if (!poolId) return;
 
@@ -72,12 +85,21 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       }
     });
 
+    // Instantly remove pins when people leave the pool
+    channel.bind('user-left', (data: { userId: string }) => {
+      setLiveUsers((prev) => {
+        const newState = { ...prev };
+        delete newState[data.userId];
+        return newState;
+      });
+    });
+
     return () => {
       pusher.unsubscribe(poolId);
     };
   }, [poolId, userName]);
 
-  // 2. Geolocation Broadcaster
+  // 2. Geolocation Broadcaster (With 2km Geofence)
   useEffect(() => {
     if (!navigator.geolocation) {
       console.error("Geolocation not supported by this browser.");
@@ -88,7 +110,7 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       (position) => {
         const { latitude, longitude } = position.coords;
         
-        // Always update local state so the user can see themselves
+        // Always update local state so the user sees their own black pin
         setMyLocation({ lat: latitude, lng: longitude });
 
         // PRIVACY GEOFENCE: Check distance to PESU
@@ -106,8 +128,6 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
               lng: longitude,
             }),
           }).catch(err => console.error("Broadcast failed:", err));
-        } else if (poolId && distanceToCampus > 2.0) {
-          console.log(`Privacy active: You are ${distanceToCampus.toFixed(1)}km away. Location hidden from pool.`);
         }
       },
       (error) => {
@@ -132,21 +152,25 @@ export default function TrackingMap({ userName, poolId }: TrackingMapProps) {
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
       {/* Static Route Markers */}
-      <Marker position={[12.9464, 77.5306]}><Popup>Mysore Road Metro (PES side)</Popup></Marker>
-      <Marker position={[12.9465, 77.5299]}><Popup>Mysore Road Metro (Attiguppe side)</Popup></Marker>
-      <Marker position={[12.9352, 77.5364]}><Popup>PESU Front Gate</Popup></Marker>
-      <Marker position={[12.9350, 77.5329]}><Popup>PESU Back Gate</Popup></Marker>
+      <Marker position={[12.9464, 77.5306]} icon={getPin('violet')}><Popup>Mysore Road Metro (PES side)</Popup></Marker>
+      <Marker position={[12.9465, 77.5299]} icon={getPin('violet')}><Popup>Mysore Road Metro (Attiguppe side)</Popup></Marker>
+      <Marker position={[12.9352, 77.5364]} icon={getPin('orange')}><Popup>PESU Front Gate</Popup></Marker>
+      <Marker position={[12.9350, 77.5329]} icon={getPin('orange')}><Popup>PESU Back Gate</Popup></Marker>
 
-      {/* Your Live Location - NOW BLACK */}
+      {/* Your Live Location (Black Pin) */}
       {myLocation && (
-        <Marker position={[myLocation.lat, myLocation.lng]} icon={myBlackIcon}>
+        <Marker position={[myLocation.lat, myLocation.lng]} icon={getPin('black')}>
           <Popup>You</Popup>
         </Marker>
       )}
 
-      {/* Other Pool Members */}
+      {/* Other Pool Members (Dynamic: Green, Red, or Yellow) */}
       {Object.entries(liveUsers).map(([id, coords]) => (
-        <Marker key={id} position={[coords.lat, coords.lng]}>
+        <Marker 
+          key={id} 
+          position={[coords.lat, coords.lng]} 
+          icon={getPinForUser(id)} 
+        >
           <Popup>{id}</Popup>
         </Marker>
       ))}
