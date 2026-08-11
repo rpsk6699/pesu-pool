@@ -19,8 +19,7 @@ An app specifically designed for **PES students** to save money by pooling rides
   ➝ Limited to a **2 km radius from college** (to avoid sharing home location).
 - **Ride History**: Lasts for **30 days**.
 - **Capacity**:  
-  - Free tier allows **100 users at a time**.  
-  - Up to **118 users with buffer** for smooth operation.
+  - Since the app is built on Free tier services it can handle upto **100 users at a time**.  
 
 ---
 
