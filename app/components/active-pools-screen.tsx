@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useTransition, useEffect } from 'react'
 import { deletePool, joinPool, completePool } from '../actions/poolActions'
 import { ChatBox } from './chat-box'
-import PusherClient from 'pusher-js'
+import { createPusherClient, GLOBAL_POOLS_CHANNEL } from '../../lib/pusher-browser'
 
 // We reuse the same type from your home screen
 export type FeedPool = {
@@ -15,8 +15,8 @@ export type FeedPool = {
   spotsTotal: number
   leavingAt: string | Date
   status: string
-  creator: { name?: string | null } | null
-  participants?: { name?: string | null }[] 
+  creator: { id: string; name?: string | null } | null
+  participants?: { id: string; name?: string | null }[]
 }
 
 function initials(name: string) {
@@ -46,14 +46,15 @@ export function ActivePoolsScreen({ pools, userName }: { pools: FeedPool[], user
 
   // Auto-refresh the feed when someone creates/deletes a pool
   useEffect(() => {
-    const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    })
-    
-    const channel = pusher.subscribe('global-pools')
+    const pusher = createPusherClient()
+
+    const channel = pusher.subscribe(GLOBAL_POOLS_CHANNEL)
     channel.bind('pools-updated', () => router.refresh())
 
-    return () => pusher.unsubscribe('global-pools')
+    return () => {
+      pusher.unsubscribe(GLOBAL_POOLS_CHANNEL)
+      pusher.disconnect()
+    }
   }, [router])
 
   const activeUser = userName || 'Guest'

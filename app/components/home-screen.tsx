@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import { deletePool, joinPool, completePool } from '../actions/poolActions'
 import { ChatBox } from './chat-box'
 import { LeavePoolButton } from './leave-pool-button'
-import PusherClient from 'pusher-js'
+import { createPusherClient, GLOBAL_POOLS_CHANNEL } from '../../lib/pusher-browser'
 
 // Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
@@ -19,8 +19,8 @@ export type HomePool = {
   spotsTotal: number
   leavingAt: string | Date
   status: string
-  creator: { name?: string | null; email?: string | null } | null
-  participants?: { name?: string | null; email?: string | null }[] 
+  creator: { id: string; name?: string | null } | null
+  participants?: { id: string; name?: string | null }[]
 }
 
 function initials(name: string) {
@@ -49,28 +49,29 @@ export function HomeScreen({
   pools,
   activePoolCount,
   userName,
+  userId,
 }: {
   onRaisePool: () => void 
   pools: HomePool[]
   activePoolCount: number
   userName?: string | null
+  userId?: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   // Listen for background database updates
   useEffect(() => {
-    const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    })
-    
-    const channel = pusher.subscribe('global-pools')
+    const pusher = createPusherClient()
+
+    const channel = pusher.subscribe(GLOBAL_POOLS_CHANNEL)
     channel.bind('pools-updated', () => {
       router.refresh() 
     })
 
     return () => {
-      pusher.unsubscribe('global-pools')
+      pusher.unsubscribe(GLOBAL_POOLS_CHANNEL)
+      pusher.disconnect()
     }
   }, [router])
 
@@ -90,7 +91,7 @@ export function HomeScreen({
   return (
     <div className="flex flex-col gap-4">
       <div className="relative z-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-        <TrackingMap userName={activeUser} poolId={currentPoolId} />
+        <TrackingMap userName={activeUser} userId={userId ?? null} poolId={currentPoolId} />
       </div>
 
       <h2 className="mt-2 text-xs font-bold tracking-[0.04em] text-zinc-500 uppercase">Active pools</h2>

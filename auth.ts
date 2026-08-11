@@ -1,15 +1,20 @@
 import NextAuth from "next-auth"
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
 // import { PrismaAdapter } from "@auth/prisma-adapter"
-// import { prisma } from "./lib/prisma" 
+// import { prisma } from "./lib/prisma"
+
+const azureAdTenantId = process.env.AUTH_AZURE_AD_TENANT_ID
+if (!azureAdTenantId) {
+  throw new Error("Missing AUTH_AZURE_AD_TENANT_ID in environment variables")
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // adapter: PrismaAdapter(prisma), 
+  // adapter: PrismaAdapter(prisma),
   providers: [
     MicrosoftEntraID({
       clientId: process.env.AUTH_AZURE_AD_ID,
       clientSecret: process.env.AUTH_AZURE_AD_SECRET,
-      issuer: "https://login.microsoftonline.com/common/v2.0",
+      issuer: `https://login.microsoftonline.com/${azureAdTenantId}/v2.0`,
       
       // INTERCEPT AND CLEAN THE PROFILE DATA
       profile(profile) {

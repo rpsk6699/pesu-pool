@@ -21,7 +21,7 @@ function formatLeavingMeta(leavingAt: string | Date) {
 }
 
 // ADDED currentUserEmail TO THE PROPS
-export function MyRidesScreen({ pools, currentUserEmail }: { pools: HomePool[], currentUserEmail: string | null }) {
+export function MyRidesScreen({ pools, currentUserId }: { pools: HomePool[], currentUserId: string }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -37,7 +37,7 @@ export function MyRidesScreen({ pools, currentUserEmail }: { pools: HomePool[], 
         <div className="flex flex-col gap-2.5">
           {pools.map((pool) => {
             // Check if the current logged-in user is the one who created this pool
-            const isCreator = (pool.creator as { email?: string | null })?.email === currentUserEmail
+            const isCreator = pool.creator?.id === currentUserId
 
             return (
               <article

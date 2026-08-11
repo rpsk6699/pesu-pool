@@ -8,9 +8,10 @@ type HomeClientProps = {
   initialPools: HomePool[]
   activePoolCount: number
   userName?: string | null
+  userId?: string | null
 }
 
-export function HomeClient({ initialPools, activePoolCount, userName }: HomeClientProps) {
+export function HomeClient({ initialPools, activePoolCount, userName, userId }: HomeClientProps) {
   const router = useRouter()
 
   // Extract exactly how many unique users are currently in active pools
@@ -29,6 +30,7 @@ export function HomeClient({ initialPools, activePoolCount, userName }: HomeClie
         pools={initialPools}
         activePoolCount={activePoolCount}
         userName={userName}
+        userId={userId}
         onRaisePool={() => {
           // 1. Tell the Dashboard Shell to open the modal instantly
           window.dispatchEvent(new Event('openRaiseModal'))

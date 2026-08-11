@@ -2,21 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '../../lib/prisma'
-import { auth } from '../../auth'
-import Pusher from 'pusher'
-
-const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-  useTLS: true,
-})
-
-const TEST_USER = {
-  name: 'Arjun R.',
-  email: 'arjun.test@pes.edu',
-}
+import {
+  requireSessionUser,
+  getOrCreateUser,
+  assertPoolCreator,
+} from '../../lib/auth-helpers'
+import { pusher } from '../lib/pusher'
+import { GLOBAL_POOLS_CHANNEL, poolChannel } from '../../lib/pusher-channels'
 
 function combineTodayWithTime(time: string) {
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -52,20 +44,8 @@ export async function createPool(formData: FormData) {
 
   const leavingAt = leavingTime ? combineTodayWithTime(leavingTime) : new Date()
 
-  const session = await auth()
-  const sessionEmail = session?.user?.email ?? null
-  const sessionName = session?.user?.name ?? null
-
-  const effectiveUser = {
-    email: sessionEmail ?? TEST_USER.email,
-    name: sessionName ?? TEST_USER.name,
-  }
-
-  const user = await prisma.user.upsert({
-    where: { email: effectiveUser.email },
-    update: { name: effectiveUser.name },
-    create: { name: effectiveUser.name, email: effectiveUser.email },
-  })
+  const { email, name } = await requireSessionUser()
+  const user = await getOrCreateUser(email, name)
 
   // --- UPGRADED BACKEND BOUNCER (CREATE) ---
   // Blocks creating a pool if they are a driver OR a passenger in an active one
@@ -96,16 +76,20 @@ export async function createPool(formData: FormData) {
     },
   })
 
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   revalidatePath('/')
 }
 
 export async function deletePool(poolId: string) {
-  if (!poolId) return
+  if (!poolId) throw new Error('Missing poolId')
+
+  const { email } = await requireSessionUser()
+  await assertPoolCreator(poolId, email)
+
   await prisma.pool.delete({
     where: { id: poolId },
   })
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   revalidatePath('/')
   revalidatePath('/rides')
 }
@@ -113,20 +97,8 @@ export async function deletePool(poolId: string) {
 export async function joinPool(poolId: string) {
   if (!poolId) return
 
-  const session = await auth()
-  const sessionEmail = session?.user?.email ?? null
-  const sessionName = session?.user?.name ?? null
-
-  const effectiveUser = {
-    email: sessionEmail ?? TEST_USER.email,
-    name: sessionName ?? TEST_USER.name,
-  }
-
-  const user = await prisma.user.upsert({
-    where: { email: effectiveUser.email },
-    update: { name: effectiveUser.name },
-    create: { name: effectiveUser.name, email: effectiveUser.email },
-  })
+  const { email, name } = await requireSessionUser()
+  const user = await getOrCreateUser(email, name)
 
   // --- UPGRADED BACKEND BOUNCER (JOIN) ---
   const existingActivePool = await prisma.pool.findFirst({
@@ -145,34 +117,55 @@ export async function joinPool(poolId: string) {
   }
   // ---------------------------------------
 
-  const pool = await prisma.pool.findUnique({
-    where: { id: poolId },
-    include: { participants: true },
-  })
+  const joined = await prisma.$transaction(async (tx) => {
+    const pool = await tx.pool.findUnique({
+      where: { id: poolId },
+      include: { participants: true },
+    })
 
-  if (!pool || pool.spotsLeft <= 0) {
-    await pusher.trigger('global-pools', 'pools-updated', {})
-    revalidatePath('/')
-    return
-  }
+    if (!pool || pool.spotsLeft <= 0) {
+      return false
+    }
 
-  if (pool.participants.some((p: { id: string }) => p.id === user.id)) {
-    await pusher.trigger('global-pools', 'pools-updated', {})
-    revalidatePath('/')
-    return
-  }
+    if (pool.participants.some((p) => p.id === user.id)) {
+      return false
+    }
 
-  const newSpotsLeft = pool.spotsLeft - 1
-  await prisma.pool.update({
-    where: { id: poolId },
-    data: {
-      spotsLeft: newSpotsLeft,
-      status: newSpotsLeft === 0 ? 'FULL' : pool.status,
-      participants: {
-        connect: { id: user.id }, 
+    const decrementResult = await tx.pool.updateMany({
+      where: {
+        id: poolId,
+        spotsLeft: { gt: 0 },
+        status: { in: ['ACTIVE', 'FULL'] },
       },
-    },
+      data: {
+        spotsLeft: { decrement: 1 },
+      },
+    })
+
+    if (decrementResult.count !== 1) {
+      return false
+    }
+
+    const newSpotsLeft = pool.spotsLeft - 1
+
+    await tx.pool.update({
+      where: { id: poolId },
+      data: {
+        status: newSpotsLeft === 0 ? 'FULL' : pool.status,
+        participants: {
+          connect: { id: user.id },
+        },
+      },
+    })
+
+    return true
   })
+
+  if (!joined) {
+    await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
+    revalidatePath('/')
+    return
+  }
 
   // --- WHATSAPP STYLE JOIN MESSAGE ---
   try {
@@ -186,36 +179,24 @@ export async function joinPool(poolId: string) {
       data: {
         poolId: poolId,
         senderId: systemUser.id, 
-        text: `${effectiveUser.name} joined the pool! 👋`,
+        text: `${name} joined the pool! 👋`,
       }
     })
-    await pusher.trigger(poolId, 'new-message', {})
+    await pusher.trigger(poolChannel(poolId), 'new-message', {})
   } catch (error) {
     console.error("Failed to send join message:", error)
   }
   // ----------------------------------------
 
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   revalidatePath('/')
 }
 
 export async function leavePool(poolId: string) {
   if (!poolId) return
 
-  const session = await auth()
-  const sessionEmail = session?.user?.email ?? null
-  const sessionName = session?.user?.name ?? null
-
-  const effectiveUser = {
-    email: sessionEmail ?? TEST_USER.email,
-    name: sessionName ?? TEST_USER.name,
-  }
-
-  const user = await prisma.user.upsert({
-    where: { email: effectiveUser.email },
-    update: { name: effectiveUser.name },
-    create: { name: effectiveUser.name, email: effectiveUser.email },
-  })
+  const { email, name } = await requireSessionUser()
+  const user = await getOrCreateUser(email, name)
 
   const pool = await prisma.pool.findUnique({
     where: { id: poolId },
@@ -239,7 +220,7 @@ export async function leavePool(poolId: string) {
     },
   })
 
-  await pusher.trigger(poolId, 'user-left', { userId: effectiveUser.name })
+  await pusher.trigger(poolChannel(poolId), 'user-left', { userId: user.id, name })
 
   // --- WHATSAPP STYLE LEAVE MESSAGE ---
   try {
@@ -253,22 +234,25 @@ export async function leavePool(poolId: string) {
       data: {
         poolId: poolId,
         senderId: systemUser.id, 
-        text: `${effectiveUser.name} left the pool. 🚪`,
+        text: `${name} left the pool. 🚪`,
       }
     })
-    await pusher.trigger(poolId, 'new-message', {})
+    await pusher.trigger(poolChannel(poolId), 'new-message', {})
   } catch (error) {
     console.error("Failed to send leave message:", error)
   }
   // -----------------------------------------
 
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   revalidatePath('/')
   revalidatePath('/rides')
 }
 
 export async function closePool(poolId: string) {
-  if (!poolId) return
+  if (!poolId) throw new Error('Missing poolId')
+
+  const { email } = await requireSessionUser()
+  await assertPoolCreator(poolId, email)
 
   await prisma.pool.update({
     where: { id: poolId },
@@ -279,7 +263,7 @@ export async function closePool(poolId: string) {
     where: { poolId: poolId },
   })
 
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   revalidatePath('/')
 }
 
@@ -317,14 +301,17 @@ export async function sweepStalePools() {
 }
 
 export async function completePool(poolId: string) {
-  if (!poolId) return
+  if (!poolId) throw new Error('Missing poolId')
+
+  const { email } = await requireSessionUser()
+  await assertPoolCreator(poolId, email)
   
   await prisma.pool.update({
     where: { id: poolId },
     data: { status: 'COMPLETED' },
   })
   
-  await pusher.trigger('global-pools', 'pools-updated', {})
+  await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   
   revalidatePath('/')
   revalidatePath('/rides')
@@ -351,6 +338,6 @@ export async function autoCancelEmptyPools() {
       }
     })
 
-    await pusher.trigger('global-pools', 'pools-updated', {})
+    await pusher.trigger(GLOBAL_POOLS_CHANNEL, 'pools-updated', {})
   }
 }

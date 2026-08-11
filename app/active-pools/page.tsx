@@ -3,6 +3,7 @@ import { auth } from "../../auth"
 import { DashboardShell } from "../components/dashboard-shell"
 import { ActivePoolsScreen } from "../components/active-pools-screen"
 import { redirect } from "next/navigation"
+import { poolFeedInclude } from "../../lib/pool-queries"
 
 export default async function ActivePoolsPage() {
   const session = await auth()
@@ -36,7 +37,7 @@ export default async function ActivePoolsPage() {
     prisma.pool.findMany({
       where: { status: { in: ['ACTIVE', 'FULL'] } },
       orderBy: { createdAt: "desc" },
-      include: { creator: true, participants: true },
+      include: poolFeedInclude,
     }),
     prisma.pool.count({
       where: { status: { in: ['ACTIVE', 'FULL'] } }

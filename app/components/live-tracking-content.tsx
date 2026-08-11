@@ -2,17 +2,28 @@
 
 import dynamic from 'next/dynamic'
 
-// Dynamically import the map to prevent Server-Side Rendering crashes
 const TrackingMap = dynamic(() => import('./tracking-map'), { ssr: false })
 
-export function LiveTrackingContent() {
-  // Provide safe fallback values so the map loads correctly
-  const activeUser = 'Arjun R.'
-  const currentPoolId = null
+type LiveTrackingContentProps = {
+  userName: string
+  userId: string
+  poolId: string | null
+}
 
+export function LiveTrackingContent({ userName, userId, poolId }: LiveTrackingContentProps) {
   return (
     <div className="w-full rounded-xl border border-zinc-100 bg-white p-6 shadow-sm">
-      <TrackingMap userName={activeUser} poolId={currentPoolId} />
+      {poolId ? (
+        <TrackingMap userName={userName} userId={userId} poolId={poolId} />
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <span className="text-3xl">📍</span>
+          <p className="text-sm font-medium text-zinc-900">No active pool to track</p>
+          <p className="max-w-sm text-xs text-zinc-500">
+            Join or create a pool from the home screen to share live location with your co-riders.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

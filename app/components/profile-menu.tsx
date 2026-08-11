@@ -38,7 +38,7 @@ export function ProfileMenu() {
       <button
         type="button"
         onClick={() => {
-          if (!name) return signIn('github')
+          if (!name) return signIn('microsoft-entra-id')
           setOpen((v) => !v)
         }}
         className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[12px] text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"

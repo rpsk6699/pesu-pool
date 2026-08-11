@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import Pusher from 'pusher-js'
+import { createPusherClient, poolChannel } from '../../lib/pusher-browser'
 
 type Message = {
   id: string
@@ -31,13 +31,10 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
 
   // 1. Pusher Listener: Always runs in the background to catch notifications
   useEffect(() => {
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    })
-
-    const channel = pusher.subscribe(poolId)
+    const pusher = createPusherClient()
+    const channelName = poolChannel(poolId)
+    const channel = pusher.subscribe(channelName)
     channel.bind('new-message', (newMessage: Message) => {
-      // If the chat is closed, trigger the red notification dot!
       if (!isOpenRef.current) {
         setHasUnread(true)
       }
@@ -45,7 +42,8 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
     })
 
     return () => {
-      pusher.unsubscribe(poolId)
+      pusher.unsubscribe(channelName)
+      pusher.disconnect()
     }
   }, [poolId])
 
@@ -53,11 +51,17 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
   useEffect(() => {
     if (!isOpen) return
 
-    fetch(`/api/chat?poolId=${poolId}`)
-      .then((res) => res.json())
+    fetch(`/api/chat?poolId=${poolId}`, { credentials: 'same-origin' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load chat')
+        return res.json()
+      })
       .then((data) => {
-        setMessages(data)
+        setMessages(Array.isArray(data) ? data : [])
         setHasUnread(false) // Clear the notification badge once they look at it
+      })
+      .catch(() => {
+        setMessages([])
       })
   }, [isOpen, poolId])
 
@@ -80,9 +84,9 @@ export function ChatBox({ poolId, userName }: ChatBoxProps) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({
           poolId: poolId,
-          userName: userName,
           text: textToSend,
         }),
       })
